@@ -1,0 +1,10 @@
+{
+  "name": "claude-code-monitor",
+  "displayName": "P-MATRIX Runtime Safety Monitor",
+  "version": "0.3.0",
+  "description": "AI runtime governance for Claude Code — Safety Gate, Kill Switch, Live Grade",
+  "homepage": "https://app.pmatrix.io",
+  "license": "Apache-2.0",
+  "publisher": "p-matrix",
+  "contact": "architect@p-matrix.io"
+}

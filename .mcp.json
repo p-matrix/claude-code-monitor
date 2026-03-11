@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "pmatrix": {
+      "type": "stdio",
+      "command": "pmatrix-cc",
+      "args": ["mcp"]
+    }
+  }
+}

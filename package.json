@@ -1,0 +1,66 @@
+{
+  "name": "@pmatrix/claude-code-monitor",
+  "version": "0.3.0",
+  "description": "P-MATRIX runtime governance monitor for Claude Code — Safety Gate, Kill Switch, Live Grade",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "pmatrix-cc": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "NOTICE",
+    "README.md",
+    "SECURITY.md",
+    "CONTRIBUTING.md",
+    "skills",
+    ".claude-plugin",
+    "hooks",
+    ".mcp.json"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "jest --passWithNoTests",
+    "prepublishOnly": "npm run build"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.27.1"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.0.0",
+    "@types/node": "^22.0.0",
+    "jest": "^29.0.0",
+    "ts-jest": "^29.0.0",
+    "typescript": "^5.4.0"
+  },
+  "keywords": [
+    "claude-code",
+    "pmatrix",
+    "safety",
+    "monitoring",
+    "governance",
+    "agent",
+    "hooks"
+  ],
+  "license": "Apache-2.0",
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
+  },
+  "homepage": "https://github.com/p-matrix/claude-code-monitor#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/p-matrix/claude-code-monitor.git"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/__tests__/**/*.test.ts"
+    ]
+  }
+}
