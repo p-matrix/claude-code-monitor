@@ -42,23 +42,12 @@ Blocks dangerous tool calls before execution, detects credential leaks in user p
 
 ## Installation
 
-### Path A — npm CLI _(recommended)_
-
 ```bash
 npm install -g @pmatrix/claude-code-monitor
-pmatrix-cc setup --agent-id <YOUR_AGENT_ID>
-export PMATRIX_API_KEY=<YOUR_API_KEY>
+pmatrix-cc setup --api-key <YOUR_API_KEY>
 ```
 
 That's it. Every Claude Code session in this environment is now monitored.
-
-### Path B — Claude Code Plugin _(available after marketplace approval)_
-
-```bash
-claude plugin install @pmatrix/claude-code-monitor
-```
-
-> **Note:** Plugin marketplace installation is pending review. Use Path A for immediate access.
 
 ---
 
