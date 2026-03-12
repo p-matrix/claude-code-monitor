@@ -44,6 +44,8 @@ Blocks dangerous tool calls before execution, detects credential leaks in user p
 
 ```bash
 npm install -g @pmatrix/claude-code-monitor
+
+# Get your API key at app.pmatrix.io → Settings → API Keys
 pmatrix-cc setup --api-key <YOUR_API_KEY>
 ```
 
