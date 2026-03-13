@@ -17,11 +17,7 @@
 import { PMatrixConfig, SignalPayload } from '../../types';
 import { PMatrixHttpClient } from '../../client';
 import { activateHalt, isHaltActive, findActiveSession } from '../../state-store';
-
-interface McpToolResult {
-  content: Array<{ type: 'text'; text: string }>;
-  isError?: boolean;
-}
+import { McpToolResult, ok } from '../types';
 
 export async function handleHaltTool(
   args: Record<string, unknown>,
@@ -39,13 +35,13 @@ export async function handleHaltTool(
 
   // Step 2: Send stability=1.0 signal to server (best-effort, fire-and-forget)
   if (config.agentId && config.apiKey) {
-    const session = findActiveSession();
+    const session = findActiveSession('claude_code');
     const signal: SignalPayload = {
       agent_id: config.agentId,
-      baseline: 0,
-      norm: 0,
+      baseline: 0.5,
+      norm: 0.5,
       stability: 1.0,   // stability=1.0 → server-side R(t) elevation signal
-      meta_control: 0,
+      meta_control: 0.5,
       timestamp: new Date().toISOString(),
       signal_source: 'claude_code_hook',
       framework: 'claude_code',
@@ -86,8 +82,3 @@ export async function handleHaltTool(
   return ok(lines.join('\n'));
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function ok(text: string): McpToolResult {
-  return { content: [{ type: 'text', text }] };
-}

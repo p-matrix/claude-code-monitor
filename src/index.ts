@@ -108,6 +108,7 @@ async function main(): Promise<void> {
   // Prefer CLI arg, fall back to hook_event_name in event JSON
   const hookName =
     subcommand ??
+    // Double assertion required: ClaudeHookInput union lacks index signature
     (event as unknown as Record<string, unknown>)['hook_event_name'] as string | undefined;
 
   try {

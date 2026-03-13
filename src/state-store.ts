@@ -12,6 +12,10 @@
 //   - Atomic write: write to temp file then rename
 //   - Fail-open: any I/O error → return default state, never throw
 //   - Cleanup: sessions older than SESSION_TTL_MS are removed on load
+//
+// KNOWN_LIMITATION: No file lock. Concurrent access mitigated by atomic write
+// (temp→rename) + fail-open. Multi-monitor (3+) scenarios may increase collision
+// probability. Monitor via corrupted-state log.
 // =============================================================================
 
 import * as fs from 'fs';
@@ -58,11 +62,13 @@ export interface PersistedSessionState {
   // ── Metadata ────────────────────────────────────────────────────────────────
   /** ISO 8601 — last update time (used for stale cleanup) */
   updatedAt: string;
+  /** Monitor framework identifier — used to filter sessions in shared ~/.pmatrix/sessions/ */
+  framework: string;
 }
 
 // ─── Default state factory ────────────────────────────────────────────────────
 
-export function createDefaultState(sessionId: string, agentId: string): PersistedSessionState {
+function createDefaultState(sessionId: string, agentId: string): PersistedSessionState {
   const now = new Date().toISOString();
   return {
     sessionId,
@@ -80,6 +86,7 @@ export function createDefaultState(sessionId: string, agentId: string): Persiste
     permissionRequestCount: 0,
     subagentSpawnCount: 0,
     updatedAt: now,
+    framework: 'claude_code',
   };
 }
 
@@ -117,10 +124,14 @@ export function loadState(sessionId: string): PersistedSessionState | null {
   try {
     if (!fs.existsSync(filepath)) return null;
     const raw = fs.readFileSync(filepath, 'utf-8');
+    // JSON.parse is safe here — wrapped by the enclosing try/catch (fail-open)
     const state = JSON.parse(raw) as PersistedSessionState;
     return state;
-  } catch {
-    // Parse error or I/O error → treat as new session
+  } catch (err) {
+    // Parse error or I/O error → treat as new session (fail-open)
+    process.stderr.write(
+      `[P-MATRIX] state-store: corrupted or unreadable state file for session=${sessionId} — ${(err as Error).message}\n`
+    );
     return null;
   }
 }
@@ -132,16 +143,20 @@ export function loadState(sessionId: string): PersistedSessionState | null {
  */
 export function loadOrCreateState(sessionId: string, agentId: string): PersistedSessionState {
   const state = loadState(sessionId) ?? createDefaultState(sessionId, agentId);
-  // BUG-1 fix: permissionRequestCount added in P3 — guard against pre-P3 state files
+  // permissionRequestCount added in P3 — guard against pre-P3 state files
   state.permissionRequestCount ??= 0;
   // subagentSpawnCount added in v0.2.0 — guard against pre-v0.2.0 state files
   state.subagentSpawnCount ??= 0;
+  // framework added for session collision prevention — pre-existing files lack this field
+  state.framework ??= 'claude_code';
   return state;
 }
 
 /**
  * Save session state to disk.
  * Atomic: write to temp file first, then rename.
+ * Windows: rename not atomic. On corruption, state is non-authoritative —
+ * hook execution continues fail-open, score falls back to R(t)=0.0 (safe default).
  * Fail-open: any error is silently swallowed.
  */
 export function saveState(state: PersistedSessionState): void {
@@ -213,9 +228,10 @@ export function activateHalt(reason?: string): void {
 /**
  * Read the most recently updated active session from ~/.pmatrix/sessions/.
  * Used by MCP tools when no session_id is provided.
+ * @param framework — filter by framework (e.g. 'claude_code'). If omitted, returns any framework.
  * Returns null if no sessions found.
  */
-export function findActiveSession(): PersistedSessionState | null {
+export function findActiveSession(framework?: string): PersistedSessionState | null {
   try {
     const dir = sessionsDir();
     if (!fs.existsSync(dir)) return null;
@@ -231,6 +247,8 @@ export function findActiveSession(): PersistedSessionState | null {
         const filepath = path.join(dir, filename);
         const raw = fs.readFileSync(filepath, 'utf-8');
         const state = JSON.parse(raw) as PersistedSessionState;
+        // Filter by framework if specified — prevents cross-monitor session collision
+        if (framework && state.framework && state.framework !== framework) continue;
         const t = new Date(state.updatedAt).getTime();
         if (t > latestTime) {
           latestTime = t;

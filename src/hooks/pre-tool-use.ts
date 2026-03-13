@@ -72,19 +72,20 @@ export async function handlePreToolUse(
     config.safetyGate.customToolRisk
   );
 
-  // 4. meta_control special rules (tool_name only)
-  // NOTE: params=null intentionally — privacy-first policy (§5.4, no tool_input content).
-  // rm-rf/sudo/curl|sh patterns in META_CONTROL_RULES require command text (tool_input.command).
-  // These rules become active in P3 when UserPromptSubmit adds partial command metadata.
-  // Until then, checkMetaControlRules matches tool_name portion only (limited coverage).
-  const mcBlock = checkMetaControlRules(tool_name, null);
+  // 4. meta_control special rules
+  // DISABLED_BY_DESIGN: privacy-first. tool_input not available in Claude Code hooks.
+  // Enable per-platform where tool_input is provided (e.g., Cursor beforeShellExecution).
+  // META_CONTROL_RULES regex patterns (sudo/rm-rf/curl|sh) need command text in params.
+  // With params=null, only tool_name itself matches — insufficient coverage.
+  const META_CONTROL_RULES_ENABLED = false;
+  const mcBlock = META_CONTROL_RULES_ENABLED ? checkMetaControlRules(tool_name, null) : null;
   if (mcBlock !== null) {
     // Send critical signal (fire-and-forget, no await needed for response)
     const criticalSignal = buildSignal(state, session_id, tool_name, {
       event_type: 'meta_control_block',
       priority: 'critical',
       meta_control_delta: mcBlock.metaControlDelta,
-    }, config.frameworkTag ?? 'stable');
+    }, config.frameworkTag ?? 'stable', 0.05);
     client.sendCritical(criticalSignal).catch(() => {});
 
     state.dangerEvents += 1;
@@ -105,11 +106,11 @@ export async function handlePreToolUse(
     const blockSignal = buildSignal(state, session_id, tool_name, {
       event_type: 'safety_gate_block',
       priority: 'critical',
-    }, config.frameworkTag ?? 'stable');
+    }, config.frameworkTag ?? 'stable', 0.05);
     client.sendCritical(blockSignal).catch(() => {});
 
     state.safetyGateBlocks += 1;
-    state.dangerEvents += 1;  // BUG-3 fix: safety gate block is a danger event
+    state.dangerEvents += 1;  // safety gate block is a danger event
     if (rt >= config.killSwitch.autoHaltOnRt) {
       state.isHalted = true;
       state.haltReason = `R(t) ${rt.toFixed(2)} ≥ ${config.killSwitch.autoHaltOnRt}`;
@@ -184,14 +185,17 @@ function buildSignal(
   sessionId: string,
   toolName: string,
   metadata: Record<string, unknown>,
-  frameworkTag: 'beta' | 'stable'
+  frameworkTag: 'beta' | 'stable',
+  normDelta: number = 0.0,
 ): SignalPayload {
   return {
     agent_id: state.agentId,
-    baseline: 0,
-    norm: state.currentRt,   // Source::Accessibility: NORM = R(t) approximation
-    stability: 0,
-    meta_control: 0,
+    baseline: 0.5,
+    // event-based fixed delta — deny=0.05, allow/observe=0.0
+    // Replaces state.currentRt to break positive feedback loop
+    norm: normDelta,
+    stability: 0.5,
+    meta_control: 0.5,
     timestamp: new Date().toISOString(),
     signal_source: 'claude_code_hook',
     framework: 'claude_code',

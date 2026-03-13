@@ -29,7 +29,7 @@ import { scanCredentials } from '../credential-scanner';
 
 // ─── Handler result ───────────────────────────────────────────────────────────
 
-export interface UserPromptSubmitResult {
+interface UserPromptSubmitResult {
   /** true = block the prompt (index.ts calls process.exit(2)) */
   blocked: boolean;
   /** Error message written to stderr on block (shown to user by Claude Code) */
@@ -111,11 +111,11 @@ function buildCredentialAlertSignal(
 ): SignalPayload {
   return {
     agent_id: state.agentId,
-    baseline: 0,
-    norm: 0,
-    // Credential in prompt = significant stability concern
+    baseline: 0.5,
+    norm: 0.5,
+    // Credential in prompt = significant stability concern (low stability = higher risk)
     stability: 0.10,
-    meta_control: 0,
+    meta_control: 0.5,
     timestamp: new Date().toISOString(),
     signal_source: 'claude_code_hook',
     framework: 'claude_code',
@@ -140,10 +140,11 @@ function buildFrequencySignal(
 ): SignalPayload {
   return {
     agent_id: state.agentId,
-    baseline: 0,
-    norm: 0,
-    stability: 0,
-    meta_control: 0,
+    // Neutral signal — avoids all-zero → R(t)=0.75 HALT
+    baseline: 0.5,
+    norm: 0.5,
+    stability: 0.5,
+    meta_control: 0.5,
     timestamp: new Date().toISOString(),
     signal_source: 'claude_code_hook',
     framework: 'claude_code',

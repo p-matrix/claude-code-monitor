@@ -115,10 +115,11 @@ function buildSessionSignal(
 ): SignalPayload {
   return {
     agent_id: state.agentId,
-    baseline: 0,
-    norm: 0,
-    stability: 0,
-    meta_control: 0,
+    // Neutral signal (0.5) — avoids all-zero → R(t)=0.75 HALT on server
+    baseline: 0.5,
+    norm: 0.5,
+    stability: 0.5,
+    meta_control: 0.5,
     timestamp: new Date().toISOString(),
     signal_source: 'claude_code_hook',
     framework: 'claude_code',

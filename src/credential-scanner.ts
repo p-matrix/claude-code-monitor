@@ -10,6 +10,7 @@ interface CredentialPattern {
 
 const CREDENTIAL_PATTERNS: readonly CredentialPattern[] = [
   { name: 'OpenAI Project Key', pattern: /sk-proj-[A-Za-z0-9\-_]{20,}/ },
+  { name: 'OpenAI Legacy Key', pattern: /sk-(?!proj-|ant-|test-|fake-)[A-Za-z0-9]{20,}/ },
   { name: 'Anthropic Key', pattern: /sk-ant-[A-Za-z0-9\-]{40,}/ },
   { name: 'AWS Access Key', pattern: /AKIA[0-9A-Z]{16}/ },
   { name: 'GitHub Token', pattern: /ghp_[A-Za-z0-9]{36}/ },
@@ -17,9 +18,13 @@ const CREDENTIAL_PATTERNS: readonly CredentialPattern[] = [
   { name: 'Private Key (PEM)', pattern: /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/ },
   { name: 'Database URL', pattern: /(?:postgresql|mysql):\/\/[^:\s]+:[^@\s]+@/ },
   { name: 'Password in Context', pattern: /password\s*[:=]\s*["']?[^\s"']{8,}/i },
-  { name: 'Bearer Token', pattern: /Bearer\s+[A-Za-z0-9\-_]{20,}/ },
+  { name: 'Bearer Token', pattern: /Authorization:\s*Bearer\s+[A-Za-z0-9\-_.]{20,}/ },
   { name: 'Google AI Key', pattern: /AIza[0-9A-Za-z\-_]{35}/ },
   { name: 'Stripe Secret Key', pattern: /sk_(?:live|test)_[A-Za-z0-9]{24,}/ },
+  { name: 'Slack Token', pattern: /xox[bpras]-[A-Za-z0-9\-]{10,}/ },
+  { name: 'npm Token', pattern: /npm_[A-Za-z0-9]{36}/ },
+  { name: 'SendGrid Key', pattern: /SG\.[A-Za-z0-9\-_]{22,}\.[A-Za-z0-9\-_]{22,}/ },
+  { name: 'Discord Bot Token', pattern: /[MN][A-Za-z0-9]{23,}\.[A-Za-z0-9\-_]{6}\.[A-Za-z0-9\-_]{27,}/ },
 ] as const;
 
 const TEST_EXCLUSIONS = [
@@ -34,7 +39,7 @@ const TEST_EXCLUSIONS = [
   'REPLACE_',
 ] as const;
 
-export interface ScanResult {
+interface ScanResult {
   name: string;
   count: number;
 }

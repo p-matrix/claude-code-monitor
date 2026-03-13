@@ -8,14 +8,6 @@ import { ToolRiskTier, GateAction, SafetyMode } from './types';
 
 // ─── R(t) → Mode boundaries (Server constants.py, §14-4) ─────────────────────
 
-export const MODE_BOUNDARIES: Readonly<Record<SafetyMode, readonly [number, number]>> = {
-  'A+1': [0.00, 0.15],  // Normal
-  'A+0': [0.15, 0.30],  // Caution
-  'A-1': [0.30, 0.50],  // Alert
-  'A-2': [0.50, 0.75],  // Critical
-  'A-0': [0.75, 1.00],  // Halt
-} as const;
-
 export function rtToMode(rt: number): SafetyMode {
   if (rt < 0.15) return 'A+1';
   if (rt < 0.30) return 'A+0';
@@ -81,19 +73,19 @@ export function classifyToolRisk(
 
   const lower = toolName.toLowerCase();
 
+  if (HIGH_RISK_TOOLS.has(lower)) return 'HIGH';
+  if (MEDIUM_RISK_TOOLS.has(lower)) return 'MEDIUM';
+
   if (LOW_TOOL_PREFIXES.some((prefix) => lower.startsWith(prefix))) {
     return 'LOW';
   }
-
-  if (HIGH_RISK_TOOLS.has(lower)) return 'HIGH';
-  if (MEDIUM_RISK_TOOLS.has(lower)) return 'MEDIUM';
 
   return 'MEDIUM';  // conservative default
 }
 
 // ─── Safety Gate matrix (§3-1) ────────────────────────────────────────────────
 
-export interface GateResult {
+interface GateResult {
   action: GateAction;
   reason: string;
 }
@@ -150,7 +142,7 @@ export function evaluateSafetyGate(
 
 // ─── meta_control special rules (§3-1) ───────────────────────────────────────
 
-export interface MetaControlBlockResult {
+interface MetaControlBlockResult {
   reason: string;
   metaControlDelta: number;
 }
@@ -177,6 +169,16 @@ const META_CONTROL_RULES: readonly MetaControlRule[] = [
     reason: 'Remote code execution pattern detected (curl/wget | sh)',
     metaControlDelta: -0.20,
   },
+  {
+    pattern: /base64\s+(?:--decode|-d)\s+.*\|\s*(?:ba)?sh\b/i,
+    reason: 'Obfuscated RCE pattern (base64 decode | sh)',
+    metaControlDelta: -0.25,
+  },
+  {
+    pattern: /chmod\s+777\s+\//i,
+    reason: 'Dangerous permission change (chmod 777 /)',
+    metaControlDelta: -0.15,
+  },
 ] as const;
 
 export function checkMetaControlRules(
@@ -200,7 +202,7 @@ export function checkMetaControlRules(
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
-export function serializeParams(params: unknown): string {
+function serializeParams(params: unknown): string {
   if (params == null) return '';
   if (typeof params === 'string') return params;
   try {
@@ -210,8 +212,3 @@ export function serializeParams(params: unknown): string {
   }
 }
 
-export function summarizeParams(params: unknown, maxLen = 80): string {
-  const str = serializeParams(params);
-  if (str.length <= maxLen) return str;
-  return str.slice(0, maxLen - 3) + '...';
-}

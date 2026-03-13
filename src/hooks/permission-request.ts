@@ -128,9 +128,10 @@ function buildMetaControlSignal(
 ): SignalPayload {
   return {
     agent_id: state.agentId,
-    baseline: 0,
-    norm: 0,
-    stability: 0,
+    // Neutral signal for non-measured axes — avoids all-zero → R(t)=0.745 HALT
+    baseline: 0.5,
+    norm: 0.5,
+    stability: 0.5,
     // Small META_CONTROL nudge per permission request — 권한 경계 도달 빈도
     meta_control: 0.02,
     timestamp: new Date().toISOString(),

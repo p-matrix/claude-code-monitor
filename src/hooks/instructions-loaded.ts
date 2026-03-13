@@ -62,11 +62,12 @@ function buildInstructionsSignal(
   return {
     agent_id: state.agentId,
     // BASELINE: instructions presence = foundational alignment reference
-    // Source::Accessibility mode — small positive baseline signal (낮은 위험도 방향)
-    baseline: -0.01,
-    norm: 0,
-    stability: 0,
-    meta_control: 0,
+    // Small positive baseline signal (낮은 위험도 방향) — must be ≥ 0 (server schema constraint)
+    baseline: 0.01,
+    // Neutral signal for non-measured axes — avoids all-zero → R(t)=0.75 HALT
+    norm: 0.5,
+    stability: 0.5,
+    meta_control: 0.5,
     timestamp: new Date().toISOString(),
     signal_source: 'claude_code_hook',
     framework: 'claude_code',

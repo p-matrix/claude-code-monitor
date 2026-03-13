@@ -75,7 +75,8 @@ export async function runMcpServer(): Promise<void> {
   const client = new PMatrixHttpClient(config);
 
   const server = new Server(
-    // MCP server implementation version — keep in sync with package.json
+    // TODO: version should be read dynamically from package.json;
+    // deferred because dynamic import of JSON adds bundling complexity.
     { name: 'pmatrix', version: '0.3.0' },
     { capabilities: { tools: {} } }
   );

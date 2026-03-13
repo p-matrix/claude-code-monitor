@@ -20,11 +20,7 @@ import {
   PersistedSessionState,
 } from '../../state-store';
 import { rtToMode } from '../../safety-gate';
-
-interface McpToolResult {
-  content: Array<{ type: 'text'; text: string }>;
-  isError?: boolean;
-}
+import { McpToolResult, ok, err } from '../types';
 
 export async function handleStatusTool(
   args: Record<string, unknown>,
@@ -33,7 +29,7 @@ export async function handleStatusTool(
 ): Promise<McpToolResult> {
   // Validate prerequisites
   if (!config.agentId) {
-    return err('P-MATRIX not configured. Run: pmatrix-cc setup --agent-id <id>');
+    return err('P-MATRIX not configured. Run: pmatrix-cc setup --api-key <YOUR_API_KEY>');
   }
 
   // Resolve session: use provided session_id or find most recent active session
@@ -42,7 +38,7 @@ export async function handleStatusTool(
 
   const state: PersistedSessionState | null = sessionId
     ? loadState(sessionId)
-    : findActiveSession();
+    : findActiveSession('claude_code');
 
   // HALT file check
   const haltActive = isHaltActive();
@@ -133,10 +129,3 @@ function modeDescription(mode: string): string {
   return map[mode] ?? '';
 }
 
-function ok(text: string): McpToolResult {
-  return { content: [{ type: 'text', text }] };
-}
-
-function err(text: string): McpToolResult {
-  return { content: [{ type: 'text', text: `⚠️ ${text}` }], isError: true };
-}

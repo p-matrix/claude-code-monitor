@@ -170,9 +170,6 @@ export interface PermissionRequestOutput {
   };
 }
 
-/** Union of all hook outputs */
-export type ClaudeHookOutput = PreToolUseOutput | PermissionRequestOutput;
-
 // ─── 5-Mode and Grade ─────────────────────────────────────────────────────────
 
 /** P-MATRIX 5-Mode (Server constants.py 경계값 기준) */
@@ -188,10 +185,17 @@ export type ToolRiskTier = 'HIGH' | 'MEDIUM' | 'LOW';
 export type GateAction = 'ALLOW' | 'BLOCK';
 
 // ─── 4-axis state ─────────────────────────────────────────────────────────────
+//
+// Stability axis polarity convention:
+//   Monitor sends "instability" — higher value = more unstable (0=safe, 1.0=HALT).
+//   Server inverts stability for R(t) computation.
+//   Same field name, opposite semantic at producer vs consumer.
+//
 
 export interface AxesState {
   baseline: number;
   norm: number;
+  /** Instability score: 0=stable, 1.0=maximum instability. Server inverts via (1-stability). */
   stability: number;
   meta_control: number;
 }

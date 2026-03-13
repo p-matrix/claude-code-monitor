@@ -63,11 +63,11 @@ function buildFailureSignal(
 ): SignalPayload {
   return {
     agent_id: state.agentId,
-    baseline: 0,
-    norm: 0,
+    baseline: 0.5,
+    norm: 0.5,
     // Small STABILITY nudge per failure — server accumulates over session
     stability: 0.05,
-    meta_control: 0,
+    meta_control: 0.5,
     timestamp: new Date().toISOString(),
     signal_source: 'claude_code_hook',
     framework: 'claude_code',

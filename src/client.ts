@@ -30,11 +30,6 @@ const MAX_UNSENT_AGE_MS    = 7 * 24 * 60 * 60 * 1_000;
 
 // ─── Response interfaces ──────────────────────────────────────────────────────
 
-export interface HealthCheckResult {
-  healthy: boolean;
-  grade?: GradeResponse;
-}
-
 export interface SessionSummaryInput {
   sessionId: string;
   agentId: string;
@@ -66,21 +61,10 @@ export class PMatrixHttpClient {
     this.debug = config.debug;
   }
 
-  async healthCheck(): Promise<HealthCheckResult> {
-    if (!this.agentId) {
-      return { healthy: false };
-    }
-    try {
-      const grade = await this.getAgentGrade(this.agentId);
-      return { healthy: true, grade };
-    } catch {
-      return { healthy: false };
-    }
-  }
-
   async getAgentGrade(agentId: string): Promise<GradeResponse> {
     const url = `${this.baseUrl}/v1/agents/${encodeURIComponent(agentId)}/public`;
     const raw = await this.fetchWithRetry('GET', url, null);
+    // TODO(runtime-guard): validate shape at runtime if payload schema drifts
     return raw as GradeResponse;
   }
 
@@ -91,11 +75,22 @@ export class PMatrixHttpClient {
   async getAgentGradeDetail(agentId: string): Promise<AgentGradeDetail> {
     const url = `${this.baseUrl}/v1/agents/${encodeURIComponent(agentId)}/grade`;
     const raw = await this.fetchWithRetry('GET', url, null);
+    // TODO(runtime-guard): validate shape at runtime if payload schema drifts
     return raw as AgentGradeDetail;
   }
 
   async sendBatch(signals: SignalPayload[]): Promise<BatchSendResponse> {
     if (signals.length === 0) return { received: 0 };
+    // Defense-in-depth: all-zero axes → R(t)=0.75 → instant HALT.
+    // Correct to neutral (0.5) before transmission.
+    for (const s of signals) {
+      if (s.baseline === 0 && s.norm === 0 && s.stability === 0 && s.meta_control === 0) {
+        s.baseline = 0.5;
+        s.norm = 0.5;
+        s.stability = 0.5;
+        s.meta_control = 0.5;
+      }
+    }
     try {
       return await this.sendBatchDirect(signals);
     } catch (err) {
@@ -166,10 +161,11 @@ export class PMatrixHttpClient {
     const url = `${this.baseUrl}/v1/inspect/stream`;
     const payload: SignalPayload = {
       agent_id: data.agentId,
-      baseline: 0,
-      norm: 0,
-      stability: 0,
-      meta_control: 0,
+      // Neutral signal — avoids all-zero → R(t)=0.75 HALT
+      baseline: 0.5,
+      norm: 0.5,
+      stability: 0.5,
+      meta_control: 0.5,
       timestamp: new Date().toISOString(),
       signal_source: 'claude_code_hook',
       framework: 'claude_code',
@@ -191,7 +187,7 @@ export class PMatrixHttpClient {
     try {
       await this.fetchWithRetry('POST', url, payload);
     } catch {
-      this.backupToLocal([payload]);
+      await this.backupToLocal([payload]);
     }
   }
 
@@ -228,6 +224,7 @@ export class PMatrixHttpClient {
     const url = `${this.baseUrl}/v1/inspect/stream`;
     const body = signals.length === 1 ? signals[0] : signals;
     const raw = await this.fetchWithRetry('POST', url, body);
+    // TODO(runtime-guard): validate shape at runtime if payload schema drifts
     return (raw as BatchSendResponse | null) ?? { received: signals.length };
   }
 
@@ -246,8 +243,8 @@ export class PMatrixHttpClient {
         if (attempt < this.retryMax) {
           const delay = RETRY_DELAYS[attempt] ?? 2_000;
           if (this.debug) {
-            console.debug(
-              `[P-MATRIX] Retry ${attempt + 1}/${this.retryMax} after ${delay}ms: ${lastError.message}`
+            process.stderr.write(
+              `[P-MATRIX] Retry ${attempt + 1}/${this.retryMax} after ${delay}ms: ${lastError.message}\n`
             );
           }
           await sleep(delay);
@@ -298,7 +295,7 @@ export class PMatrixHttpClient {
       const filename = path.join(dir, `${Date.now()}.json`);
       await fs.promises.writeFile(filename, JSON.stringify(signals, null, 2), 'utf-8');
     } catch {
-      // silent fail — always fail-open
+      process.stderr.write('[P-MATRIX] backupToLocal failed — data not persisted\n');
     }
   }
 }

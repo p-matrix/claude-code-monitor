@@ -11,11 +11,7 @@
 
 import { PMatrixConfig } from '../../types';
 import { PMatrixHttpClient } from '../../client';
-
-interface McpToolResult {
-  content: Array<{ type: 'text'; text: string }>;
-  isError?: boolean;
-}
+import { McpToolResult, ok, err } from '../types';
 
 export async function handleGradeTool(
   _args: Record<string, unknown>,
@@ -23,7 +19,7 @@ export async function handleGradeTool(
   client: PMatrixHttpClient
 ): Promise<McpToolResult> {
   if (!config.agentId) {
-    return err('P-MATRIX not configured. Run: pmatrix-cc setup --agent-id <id>');
+    return err('P-MATRIX not configured. Run: pmatrix-cc setup --api-key <YOUR_API_KEY>');
   }
   if (!config.apiKey) {
     return err('No API key. Set PMATRIX_API_KEY or run: pmatrix-cc setup');
@@ -78,12 +74,3 @@ export async function handleGradeTool(
   return ok(lines.join('\n'));
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function ok(text: string): McpToolResult {
-  return { content: [{ type: 'text', text }] };
-}
-
-function err(text: string): McpToolResult {
-  return { content: [{ type: 'text', text: `⚠️ ${text}` }], isError: true };
-}
