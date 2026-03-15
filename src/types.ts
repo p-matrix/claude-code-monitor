@@ -127,6 +127,59 @@ export interface InstructionsLoadedInput {
   cwd?: string;
 }
 
+/**
+ * ElicitationResult hook input — CC v2.1.76 신규
+ * Gate hook — credential 감지 시 차단 가능 (exit 2)
+ */
+export interface ElicitationResultInput {
+  hook_event_name: 'ElicitationResult';
+  session_id: string;
+  /** User's response text from elicitation — scanned for credentials, NOT stored */
+  result?: string;
+  mcp_server_name?: string;
+}
+
+/**
+ * Elicitation hook input — CC v2.1.76 신규
+ * Observation only (no blocking)
+ */
+export interface ElicitationInput {
+  hook_event_name: 'Elicitation';
+  session_id: string;
+  mcp_server_name?: string;
+}
+
+/**
+ * PostCompact hook input — CC v2.1.76 신규
+ * Observation only (no blocking)
+ */
+export interface PostCompactInput {
+  hook_event_name: 'PostCompact';
+  session_id: string;
+  messages_before?: number;
+  messages_after?: number;
+}
+
+/**
+ * WorktreeCreate hook input — CC v2.1.76 신규
+ * Observation only (no blocking)
+ */
+export interface WorktreeCreateInput {
+  hook_event_name: 'WorktreeCreate';
+  session_id: string;
+  worktree_path?: string;
+}
+
+/**
+ * WorktreeRemove hook input — CC v2.1.76 신규
+ * Observation only (no blocking)
+ */
+export interface WorktreeRemoveInput {
+  hook_event_name: 'WorktreeRemove';
+  session_id: string;
+  worktree_path?: string;
+}
+
 /** Union of all hook inputs */
 export type ClaudeHookInput =
   | PreToolUseInput
@@ -137,7 +190,12 @@ export type ClaudeHookInput =
   | SubagentStartInput
   | SubagentStopInput
   | UserPromptSubmitInput
-  | InstructionsLoadedInput;
+  | InstructionsLoadedInput
+  | ElicitationResultInput
+  | ElicitationInput
+  | PostCompactInput
+  | WorktreeCreateInput
+  | WorktreeRemoveInput;
 
 // ─── Claude Code Hook Output (stdout JSON) ───────────────────────────────────
 

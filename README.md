@@ -14,7 +14,7 @@ Blocks dangerous tool calls before execution, detects credential leaks in user p
 
 - **Safety Gate** — Intercepts high-risk tool calls before execution.
   Blocks based on current risk level R(t). No confirmation step — Claude Code hooks support allow/deny only.
-- **Credential Protection** — Detects and blocks 11 types of API keys
+- **Credential Protection** — Detects and blocks 16 types of API keys
   and secrets before they reach the agent.
 - **Kill Switch** — Automatically halts the agent when R(t) ≥ 0.75.
   Manually via `/pmatrix-halt`. Creates `~/.pmatrix/HALT` to block all sessions.
@@ -27,6 +27,26 @@ Blocks dangerous tool calls before execution, detects credential leaks in user p
   a stability nudge (+0.03 per spawn) for complexity risk.
 - **Live Grade** — Streams 4-axis safety signals and displays Trust
   Grade (A–E) in real time.
+
+### 4.0 Field Integration (v0.4.0+)
+
+When connected to a P-MATRIX Field, the monitor participates in the 4.0 Protocol with IPC-based degraded SV (neutral 0.5 axes):
+
+- **State Vector Exchange** — Sends behavioral measurements to Field peers
+- **`pmatrix_field_status`** MCP tool — Query Field connection status
+
+**Activation:** Set both environment variables:
+
+| Variable | Description |
+|----------|-------------|
+| `PMATRIX_FIELD_ID` | Field identifier |
+| `PMATRIX_FIELD_NODE_ID` | Node identifier |
+
+When not set, the monitor runs in standalone 3.5 mode (default).
+
+### Hooks (14)
+
+PreToolUse, PermissionRequest, SessionStart, SessionEnd, PostToolUseFailure, SubagentStart, SubagentStop, UserPromptSubmit, InstructionsLoaded, ElicitationResult, Elicitation, PostCompact, WorktreeCreate, WorktreeRemove
 
 ---
 
@@ -165,18 +185,24 @@ The Safety Gate intercepts tool calls before execution and evaluates them agains
 
 ## Credential Protection
 
-Detects and blocks 11 credential types before they are sent:
+Detects and blocks 16 credential types before they are sent:
 
-- OpenAI API keys (`sk-proj-...`)
+- OpenAI Project keys (`sk-proj-...`)
+- OpenAI Legacy keys (`sk-...`)
 - Anthropic API keys (`sk-ant-...`)
 - AWS Access Keys (`AKIA...`)
-- GitHub tokens (`ghp_...`, `github_pat_...`)
-- Private keys (`-----BEGIN PRIVATE KEY-----`)
-- Database URLs (`postgresql://user:pass@...`)
+- GitHub tokens (`ghp_...`)
+- GitHub Fine-grained tokens (`github_pat_...`)
+- Private keys (PEM) (`-----BEGIN PRIVATE KEY-----`)
+- Database URLs (`postgresql://`, `mysql://`)
 - Passwords (`password: "..."`)
-- Bearer tokens
+- Bearer tokens (`Authorization: Bearer ...`)
 - Google AI keys (`AIza...`)
 - Stripe keys (`sk_live_...`, `sk_test_...`)
+- Slack tokens (`xox[bpras]-...`)
+- npm tokens (`npm_...`)
+- SendGrid keys (`SG....`)
+- Discord Bot tokens
 
 Code blocks in messages are excluded from scanning to prevent false positives.
 
@@ -205,14 +231,16 @@ Repeated failures shift the agent toward higher risk — this reflects degrading
 ## R(t) Formula
 
 ```
-R(t) = 1 - (BASELINE + NORM + STABILITY + META_CONTROL) / 4
+R(t) = 1 - (BASELINE + NORM + (1 - STABILITY) + META_CONTROL) / 4
 ```
+
+> stability is inverted: higher stability = more drift = higher risk
 
 | Axis | Field | Meaning |
 |------|-------|---------|
 | BASELINE | `baseline` | Initial config integrity — higher = safer |
 | NORM | `norm` | Behavioral normalcy — higher = safer |
-| STABILITY | `stability` | Trajectory stability — lower = more drift |
+| STABILITY | `stability` | Trajectory stability — higher = more drift |
 | META_CONTROL | `meta_control` | Self-control capacity — higher = safer |
 
 P-Score = `round(100 * (1 - R(t)), 2)`

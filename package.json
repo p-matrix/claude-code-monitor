@@ -1,9 +1,15 @@
 {
   "name": "@pmatrix/claude-code-monitor",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "P-MATRIX runtime governance monitor for Claude Code — Safety Gate, Kill Switch, Live Grade",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "bin": {
     "pmatrix-cc": "./dist/index.js"
   },
@@ -28,7 +34,8 @@
     "node": ">=18"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.27.1"
+    "@modelcontextprotocol/sdk": "1.27.1",
+    "@pmatrix/field-node-runtime": "^0.2.0"
   },
   "devDependencies": {
     "@types/jest": "^29.0.0",
@@ -44,7 +51,10 @@
     "monitoring",
     "governance",
     "agent",
-    "hooks"
+    "hooks",
+    "field",
+    "protocol",
+    "state-vector"
   ],
   "author": "P-MATRIX <architect@p-matrix.io>",
   "license": "Apache-2.0",

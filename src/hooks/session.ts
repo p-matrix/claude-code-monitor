@@ -27,6 +27,7 @@ import {
   cleanupStaleStates,
   PersistedSessionState,
 } from '../state-store';
+import { deleteFieldState } from '@pmatrix/field-node-runtime';
 
 // ─── SessionStart ─────────────────────────────────────────────────────────────
 
@@ -43,6 +44,17 @@ export async function handleSessionStart(
 
   // Load or create session state
   const state = loadOrCreateState(session_id, agentId);
+
+  // Guard: SessionStart double-fire defense (CC v2.1.76 bugfix 대응)
+  if (state.sessionStartFired) {
+    if (config.debug) {
+      process.stderr.write(
+        `[P-MATRIX] SessionStart: duplicate fire ignored session=${session_id}\n`
+      );
+    }
+    return;
+  }
+  state.sessionStartFired = true;
 
   if (config.debug) {
     process.stderr.write(
@@ -103,6 +115,7 @@ export async function handleSessionEnd(
 
   // Clean up session state
   deleteState(session_id);
+  deleteFieldState(session_id);
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

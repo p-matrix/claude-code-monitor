@@ -39,6 +39,11 @@ import {
   SubagentStopInput,
   UserPromptSubmitInput,
   InstructionsLoadedInput,
+  ElicitationResultInput,
+  ElicitationInput,
+  PostCompactInput,
+  WorktreeCreateInput,
+  WorktreeRemoveInput,
 } from './types';
 import { handlePreToolUse } from './hooks/pre-tool-use';
 import { handleSessionStart, handleSessionEnd } from './hooks/session';
@@ -47,6 +52,13 @@ import { handlePostToolUseFailure } from './hooks/post-tool-use-failure';
 import { handleSubagentStart, handleSubagentStop } from './hooks/subagent';
 import { handleUserPromptSubmit } from './hooks/user-prompt-submit';
 import { handleInstructionsLoaded } from './hooks/instructions-loaded';
+import { handleElicitationResult } from './hooks/elicitation';
+import {
+  handleElicitation,
+  handlePostCompact,
+  handleWorktreeCreate,
+  handleWorktreeRemove,
+} from './hooks/observation';
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
@@ -184,6 +196,46 @@ async function main(): Promise<void> {
       case 'instructions-loaded':
       case 'InstructionsLoaded': {
         await handleInstructionsLoaded(event as InstructionsLoadedInput, config, client);
+        break;
+      }
+
+      // CC-2: ElicitationResult — credential gate (CC v2.1.76)
+      case 'elicitation-result':
+      case 'ElicitationResult': {
+        const elicitResult = await handleElicitationResult(
+          event as ElicitationResultInput,
+          config,
+          client
+        );
+        if (elicitResult.blocked) {
+          process.stderr.write(elicitResult.reason ?? '[P-MATRIX] Credential detected in elicitation\n');
+          process.exit(2);
+        }
+        break;
+      }
+
+      // CC-3: Observation hooks (CC v2.1.76)
+      case 'elicitation':
+      case 'Elicitation': {
+        await handleElicitation(event as ElicitationInput, config, client);
+        break;
+      }
+
+      case 'post-compact':
+      case 'PostCompact': {
+        await handlePostCompact(event as PostCompactInput, config, client);
+        break;
+      }
+
+      case 'worktree-create':
+      case 'WorktreeCreate': {
+        await handleWorktreeCreate(event as WorktreeCreateInput, config, client);
+        break;
+      }
+
+      case 'worktree-remove':
+      case 'WorktreeRemove': {
+        await handleWorktreeRemove(event as WorktreeRemoveInput, config, client);
         break;
       }
 

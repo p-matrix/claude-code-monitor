@@ -26,6 +26,7 @@ import {
   saveState,
 } from '../state-store';
 import { scanCredentials } from '../credential-scanner';
+import { isField4Enabled, writeFieldState } from '@pmatrix/field-node-runtime';
 
 // ─── Handler result ───────────────────────────────────────────────────────────
 
@@ -96,6 +97,15 @@ export async function handleUserPromptSubmit(
   }
 
   saveState(state);
+
+  // 4.0 Field IPC: write axes for MCP poller
+  if (isField4Enabled()) {
+    writeFieldState(session_id, {
+      currentRt: state.currentRt,
+      currentMode: state.currentMode,
+      totalTurns: state.totalTurns,
+    });
+  }
 
   return { blocked: false };
 }

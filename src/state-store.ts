@@ -64,6 +64,16 @@ export interface PersistedSessionState {
   updatedAt: string;
   /** Monitor framework identifier — used to filter sessions in shared ~/.pmatrix/sessions/ */
   framework: string;
+
+  // ── SessionStart double-fire defense ──────────────────────────────────────
+  /** SessionStart 이중발화 방어 플래그 (CC v2.1.76 bugfix 대응) */
+  sessionStartFired: boolean;
+
+  // ── Observation counters (CC-3) ───────────────────────────────────────────
+  /** Elicitation 요청 횟수 */
+  elicitationCount: number;
+  /** Context compact 발생 횟수 */
+  compactCount: number;
 }
 
 // ─── Default state factory ────────────────────────────────────────────────────
@@ -87,6 +97,9 @@ function createDefaultState(sessionId: string, agentId: string): PersistedSessio
     subagentSpawnCount: 0,
     updatedAt: now,
     framework: 'claude_code',
+    sessionStartFired: false,
+    elicitationCount: 0,
+    compactCount: 0,
   };
 }
 
@@ -149,6 +162,11 @@ export function loadOrCreateState(sessionId: string, agentId: string): Persisted
   state.subagentSpawnCount ??= 0;
   // framework added for session collision prevention — pre-existing files lack this field
   state.framework ??= 'claude_code';
+  // CC-1: sessionStartFired added for double-fire defense
+  state.sessionStartFired ??= false;
+  // CC-3: observation counters
+  state.elicitationCount ??= 0;
+  state.compactCount ??= 0;
   return state;
 }
 
