@@ -180,6 +180,29 @@ export interface WorktreeRemoveInput {
   worktree_path?: string;
 }
 
+/**
+ * TaskCreated hook input — CC v2.1.85 신규
+ * Observation only (no blocking) — fires when a task is created via TaskCreate
+ */
+export interface TaskCreatedInput {
+  hook_event_name: 'TaskCreated';
+  session_id: string;
+  /** Task ID (if available) */
+  task_id?: string;
+  cwd?: string;
+}
+
+/**
+ * StopFailure hook input — CC v2.1.85 신규
+ * Observation + stability signal — fires when Claude Code fails to stop properly
+ */
+export interface StopFailureInput {
+  hook_event_name: 'StopFailure';
+  session_id: string;
+  /** Reason for stop failure */
+  error?: string;
+}
+
 /** Union of all hook inputs */
 export type ClaudeHookInput =
   | PreToolUseInput
@@ -195,7 +218,9 @@ export type ClaudeHookInput =
   | ElicitationInput
   | PostCompactInput
   | WorktreeCreateInput
-  | WorktreeRemoveInput;
+  | WorktreeRemoveInput
+  | TaskCreatedInput
+  | StopFailureInput;
 
 // ─── Claude Code Hook Output (stdout JSON) ───────────────────────────────────
 

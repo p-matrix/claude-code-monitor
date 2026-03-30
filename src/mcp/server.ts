@@ -178,10 +178,16 @@ export async function runMcpServer(): Promise<void> {
     }
   }
 
+  // Gen2.5: Read version from package.json dynamically
+  let _pkgVersion = '0.5.0';
+  try {
+    const _pkgPath = path.join(__dirname, '..', '..', 'package.json');
+    const _pkg = JSON.parse(fs.readFileSync(_pkgPath, 'utf-8'));
+    _pkgVersion = _pkg.version || _pkgVersion;
+  } catch { /* fallback to hardcoded */ }
+
   const server = new Server(
-    // TODO: version should be read dynamically from package.json;
-    // deferred because dynamic import of JSON adds bundling complexity.
-    { name: 'pmatrix', version: '0.4.0' },
+    { name: 'pmatrix', version: _pkgVersion },
     { capabilities: { tools: {} } }
   );
 

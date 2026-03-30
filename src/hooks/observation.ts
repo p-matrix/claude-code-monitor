@@ -1,8 +1,9 @@
 // =============================================================================
 // @pmatrix/claude-code-monitor — hooks/observation.ts
-// CC-3: Observation-only handlers for CC v2.1.76 신규 훅 4종
+// CC-3/CC-4: Observation-only handlers for CC v2.1.76+ 신규 훅 5종
 //
 // 게이트 아님 — 관측 전용 (fire-and-forget 시그널 + 카운터)
+//   - TaskCreated: 태스크 생성 텔레메트리 (taskCount++) [CC v2.1.85]
 //   - Elicitation: elicitation 요청 발생 텔레메트리 (elicitationCount++)
 //   - PostCompact: context compact 발생 텔레메트리 (compactCount++)
 //   - WorktreeCreate: worktree 생성 시그널 (카운터 불필요)
@@ -12,12 +13,16 @@
 import {
   PMatrixConfig,
   SignalPayload,
+  TaskCreatedInput,
 } from '../types';
 import { PMatrixHttpClient } from '../client';
 import {
   loadOrCreateState,
   saveState,
 } from '../state-store';
+
+// Re-export for index.ts convenience
+export type { TaskCreatedInput } from '../types';
 
 // ─── Input types ────────────────────────────────────────────────────────────
 
@@ -49,6 +54,34 @@ export interface WorktreeRemoveInput {
 }
 
 // ─── Handlers ───────────────────────────────────────────────────────────────
+
+export async function handleTaskCreated(
+  event: TaskCreatedInput,
+  config: PMatrixConfig,
+  client: PMatrixHttpClient,
+): Promise<void> {
+  const { session_id } = event;
+  const state = loadOrCreateState(session_id, config.agentId);
+
+  state.taskCount += 1;
+
+  if (config.dataSharing) {
+    const signal = buildObservationSignal(state, session_id, {
+      event_type: 'task_created',
+      task_id: event.task_id,
+      task_count: state.taskCount,
+    }, config.frameworkTag ?? 'stable');
+    client.sendCritical(signal).catch(() => {});
+  }
+
+  if (config.debug) {
+    process.stderr.write(
+      `[P-MATRIX] TaskCreated: count=${state.taskCount} session=${session_id}\n`
+    );
+  }
+
+  saveState(state);
+}
 
 export async function handleElicitation(
   event: ElicitationInput,

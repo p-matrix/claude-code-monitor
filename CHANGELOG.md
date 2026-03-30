@@ -4,6 +4,20 @@ All notable changes to `@pmatrix/claude-code-monitor` will be documented in this
 
 ---
 
+## [0.4.1] — 2026-03-23
+
+### Fixed
+
+- **setup.ts** — `pmatrix-cc setup` 시 CC v2.1.76+ 신규 훅 5종이 `~/.claude/settings.json`에 미등록되던 갭 수정
+  - `ElicitationResult` — gate hook (timeout 5s, credential scan)
+  - `Elicitation` — MCP elicitation 요청 관찰
+  - `PostCompact` — context compact 이벤트 관찰
+  - `WorktreeCreate` / `WorktreeRemove` — worktree 생명주기 관찰
+- 핸들러 코드는 v0.4.0에서 이미 완전 구현됨; 이 패치는 `buildHookConfig()` 등록 누락만 수정
+- setup 출력 메시지에 신규 훅 4줄 추가
+
+---
+
 ## [0.4.0] — 2026-03-15
 
 ### Added

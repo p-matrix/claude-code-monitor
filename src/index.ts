@@ -14,6 +14,13 @@
 //   pmatrix-cc subagent-stop           [P2]
 //   pmatrix-cc user-prompt-submit      [P3]
 //   pmatrix-cc instructions-loaded     [P4]
+//   pmatrix-cc elicitation-result      [CC v2.1.76+]
+//   pmatrix-cc elicitation             [CC v2.1.76+]
+//   pmatrix-cc post-compact            [CC v2.1.76+]
+//   pmatrix-cc worktree-create         [CC v2.1.76+]
+//   pmatrix-cc worktree-remove         [CC v2.1.76+]
+//   pmatrix-cc task-created            [CC v2.1.85+]
+//   pmatrix-cc stop-failure            [CC v2.1.85+]
 //   pmatrix-cc mcp            -- stdio MCP server (pmatrix_status/grade/halt)
 //   pmatrix-cc setup          -- writes hook config to ~/.claude/settings.json
 //
@@ -44,6 +51,8 @@ import {
   PostCompactInput,
   WorktreeCreateInput,
   WorktreeRemoveInput,
+  TaskCreatedInput,
+  StopFailureInput,
 } from './types';
 import { handlePreToolUse } from './hooks/pre-tool-use';
 import { handleSessionStart, handleSessionEnd } from './hooks/session';
@@ -58,7 +67,9 @@ import {
   handlePostCompact,
   handleWorktreeCreate,
   handleWorktreeRemove,
+  handleTaskCreated,
 } from './hooks/observation';
+import { handleStopFailure } from './hooks/stop-failure';
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
@@ -236,6 +247,19 @@ async function main(): Promise<void> {
       case 'worktree-remove':
       case 'WorktreeRemove': {
         await handleWorktreeRemove(event as WorktreeRemoveInput, config, client);
+        break;
+      }
+
+      // CC v2.1.85 hooks
+      case 'task-created':
+      case 'TaskCreated': {
+        await handleTaskCreated(event as TaskCreatedInput, config, client);
+        break;
+      }
+
+      case 'stop-failure':
+      case 'StopFailure': {
+        await handleStopFailure(event as StopFailureInput, config, client);
         break;
       }
 

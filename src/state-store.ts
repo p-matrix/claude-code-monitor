@@ -74,6 +74,12 @@ export interface PersistedSessionState {
   elicitationCount: number;
   /** Context compact 발생 횟수 */
   compactCount: number;
+
+  // ── CC v2.1.85 counters ──────────────────────────────────────────────────
+  /** TaskCreated 발생 횟수 */
+  taskCount: number;
+  /** StopFailure 발생 횟수 */
+  stopFailureCount: number;
 }
 
 // ─── Default state factory ────────────────────────────────────────────────────
@@ -100,6 +106,8 @@ function createDefaultState(sessionId: string, agentId: string): PersistedSessio
     sessionStartFired: false,
     elicitationCount: 0,
     compactCount: 0,
+    taskCount: 0,
+    stopFailureCount: 0,
   };
 }
 
@@ -167,6 +175,9 @@ export function loadOrCreateState(sessionId: string, agentId: string): Persisted
   // CC-3: observation counters
   state.elicitationCount ??= 0;
   state.compactCount ??= 0;
+  // CC v2.1.85: new counters
+  state.taskCount ??= 0;
+  state.stopFailureCount ??= 0;
   return state;
 }
 

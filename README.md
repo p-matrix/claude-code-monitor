@@ -44,9 +44,9 @@ When connected to a P-MATRIX Field, the monitor participates in the 4.0 Protocol
 
 When not set, the monitor runs in standalone 3.5 mode (default).
 
-### Hooks (14)
+### Hooks (16)
 
-PreToolUse, PermissionRequest, SessionStart, SessionEnd, PostToolUseFailure, SubagentStart, SubagentStop, UserPromptSubmit, InstructionsLoaded, ElicitationResult, Elicitation, PostCompact, WorktreeCreate, WorktreeRemove
+PreToolUse, PermissionRequest, SessionStart, SessionEnd, PostToolUseFailure, SubagentStart, SubagentStop, UserPromptSubmit, InstructionsLoaded, ElicitationResult, Elicitation, PostCompact, WorktreeCreate, WorktreeRemove, TaskCreated, StopFailure
 
 ---
 
@@ -55,7 +55,7 @@ PreToolUse, PermissionRequest, SessionStart, SessionEnd, PostToolUseFailure, Sub
 | Requirement | Version |
 |-------------|---------|
 | Node.js | >= 18 |
-| Claude Code CLI | latest |
+| Claude Code CLI | v2.1.85+ |
 | P-MATRIX server | v1.0.0+ |
 
 ---
@@ -225,6 +225,26 @@ Repeated failures shift the agent toward higher risk — this reflects degrading
 - Each spawn sends a stability nudge (+0.03) to the server
 - Spawn count is recorded in session state
 - Excessive spawning increases complexity risk via the STABILITY axis
+
+---
+
+## Task Creation Tracking (v0.5.0+)
+
+`TaskCreated` hook observes task creation events:
+
+- Each task creation increments `taskCount` in session state
+- Observation-only signal (neutral 0.5 all axes)
+- Useful for monitoring parallel work patterns
+
+---
+
+## Stop Failure Tracking (v0.5.0+)
+
+`StopFailure` hook records abnormal session termination:
+
+- Each stop failure sends a stability nudge (+0.05) to the server
+- Increments both `stopFailureCount` and `dangerEvents`
+- Abnormal termination = instability indicator, same pattern as tool failure
 
 ---
 

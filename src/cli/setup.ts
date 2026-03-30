@@ -18,6 +18,9 @@
 //   - PermissionRequest (command hook)
 //   - SessionStart (command hook)
 //   - SessionEnd (command hook)
+//   - PostToolUseFailure, SubagentStart/Stop, UserPromptSubmit, InstructionsLoaded
+//   - ElicitationResult (gate hook — credential scan, CC v2.1.76+)
+//   - Elicitation, PostCompact, WorktreeCreate, WorktreeRemove (observation, CC v2.1.76+)
 // =============================================================================
 
 import * as fs from 'fs';
@@ -101,6 +104,12 @@ export async function runSetup(): Promise<void> {
   console.log('  • SubagentStart/Stop   → Subagent tree observation [P2]');
   console.log('  • UserPromptSubmit     → Credential scan + frequency [P3]');
   console.log('  • InstructionsLoaded   → CLAUDE.md load observation [P4]');
+  console.log('  • ElicitationResult    → Credential gate for MCP elicitation [CC v2.1.76+]');
+  console.log('  • Elicitation          → MCP elicitation request observation [CC v2.1.76+]');
+  console.log('  • PostCompact          → Context compaction observation [CC v2.1.76+]');
+  console.log('  • WorktreeCreate/Remove→ Worktree lifecycle observation [CC v2.1.76+]');
+  console.log('  • TaskCreated          → Task creation observation [CC v2.1.85+]');
+  console.log('  • StopFailure          → Stop failure stability signal [CC v2.1.85+]');
   console.log('');
   console.log('MCP server registered (global):');
   console.log('  pmatrix → pmatrix-cc mcp  (pmatrix_status / pmatrix_grade / pmatrix_halt)');
@@ -226,6 +235,79 @@ function buildHookConfig(binaryPath: string): Record<string, ClaudeHookMatcher[]
             type: 'command',
             command: `${binaryPath} instructions-loaded`,
             // No timeout — async-only hook, does not block Claude Code execution
+          },
+        ],
+      },
+    ],
+    // ── CC v2.1.76+ hooks ──────────────────────────────────────────────────────
+    ElicitationResult: [
+      {
+        hooks: [
+          {
+            type: 'command',
+            command: `${binaryPath} elicitation-result`,
+            timeout: 5,  // gate hook — credential scan; fail-open if exceeded
+          },
+        ],
+      },
+    ],
+    Elicitation: [
+      {
+        hooks: [
+          {
+            type: 'command',
+            command: `${binaryPath} elicitation`,
+          },
+        ],
+      },
+    ],
+    PostCompact: [
+      {
+        hooks: [
+          {
+            type: 'command',
+            command: `${binaryPath} post-compact`,
+          },
+        ],
+      },
+    ],
+    WorktreeCreate: [
+      {
+        hooks: [
+          {
+            type: 'command',
+            command: `${binaryPath} worktree-create`,
+          },
+        ],
+      },
+    ],
+    WorktreeRemove: [
+      {
+        hooks: [
+          {
+            type: 'command',
+            command: `${binaryPath} worktree-remove`,
+          },
+        ],
+      },
+    ],
+    // ── CC v2.1.85+ hooks ──────────────────────────────────────────────────────
+    TaskCreated: [
+      {
+        hooks: [
+          {
+            type: 'command',
+            command: `${binaryPath} task-created`,
+          },
+        ],
+      },
+    ],
+    StopFailure: [
+      {
+        hooks: [
+          {
+            type: 'command',
+            command: `${binaryPath} stop-failure`,
           },
         ],
       },
