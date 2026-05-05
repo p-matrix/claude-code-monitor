@@ -27,6 +27,7 @@ import {
   loadOrCreateState,
   saveState,
 } from '../state-store';
+import { BreachSupport } from '../breach-support';
 
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
@@ -52,10 +53,15 @@ export async function handleSubagentStart(
   if (config.dataSharing) {
     // stability: 0.03 per spawn — subagent complexity nudge (server accumulates)
     // Phase 0 confirmed: server uses signal.stability directly, not event_type calc
+    // Breach Taxonomy: infer delegated_action_type + event_subtype for Pattern Matcher
+    const breachSupport = BreachSupport.loadOrCreate(config.agentId, session_id);
+    const delegatedActionType = breachSupport.inferDelegatedActionType();
     const signal = buildSubagentSignal(state, session_id, 0.03, {
       event_type: 'subagent_start',
+      event_subtype: 'spawn',
       subagent_session_id,
       subagent_spawn_count: state.subagentSpawnCount,
+      ...(delegatedActionType ? { delegated_action_type: delegatedActionType } : {}),
     }, config.frameworkTag ?? 'stable');
     client.sendCritical(signal).catch(() => {});
   }

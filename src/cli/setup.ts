@@ -110,6 +110,9 @@ export async function runSetup(): Promise<void> {
   console.log('  • WorktreeCreate/Remove→ Worktree lifecycle observation [CC v2.1.76+]');
   console.log('  • TaskCreated          → Task creation observation [CC v2.1.85+]');
   console.log('  • StopFailure          → Stop failure stability signal [CC v2.1.85+]');
+  console.log('  • CwdChanged           → Working directory change observation [CC v2.1.83+]');
+  console.log('  • FileChanged          → Filesystem change observation [CC v2.1.89+]');
+  console.log('  • PermissionDenied     → Auto-mode classifier deny observation [CC v2.1.119+]');
   console.log('');
   console.log('MCP server registered (global):');
   console.log('  pmatrix → pmatrix-cc mcp  (pmatrix_status / pmatrix_grade / pmatrix_halt)');
@@ -308,6 +311,38 @@ function buildHookConfig(binaryPath: string): Record<string, ClaudeHookMatcher[]
           {
             type: 'command',
             command: `${binaryPath} stop-failure`,
+          },
+        ],
+      },
+    ],
+    // ── CC v2.1.83/89/119 hooks (v0.7.0) ──────────────────────────────────────
+    CwdChanged: [
+      {
+        hooks: [
+          {
+            type: 'command',
+            command: `${binaryPath} cwd-changed`,
+          },
+        ],
+      },
+    ],
+    FileChanged: [
+      {
+        hooks: [
+          {
+            type: 'command',
+            command: `${binaryPath} file-changed`,
+          },
+        ],
+      },
+    ],
+    PermissionDenied: [
+      {
+        hooks: [
+          {
+            type: 'command',
+            command: `${binaryPath} permission-denied`,
+            timeout: 5,
           },
         ],
       },

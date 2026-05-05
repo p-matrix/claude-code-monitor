@@ -19,10 +19,42 @@ import {
   TrustGrade,
 } from './types';
 
+// ─── Runtime shape guards ─────────────────────────────────────────────────────
+// Defensive checks that detect payload schema drift at runtime.
+// Throws if response is malformed; monitor's caller treats as network failure.
+
+function assertGradeResponseShape(raw: unknown): asserts raw is GradeResponse {
+  if (!raw || typeof raw !== 'object') {
+    throw new Error('PMatrix API: GradeResponse payload not an object');
+  }
+  const r = raw as Record<string, unknown>;
+  if (typeof r.agent_id !== 'string' || typeof r.grade !== 'string' || !r.axes) {
+    throw new Error('PMatrix API: GradeResponse missing required fields (agent_id/grade/axes)');
+  }
+}
+
+function assertAgentGradeDetailShape(raw: unknown): asserts raw is AgentGradeDetail {
+  if (!raw || typeof raw !== 'object') {
+    throw new Error('PMatrix API: AgentGradeDetail payload not an object');
+  }
+  const r = raw as Record<string, unknown>;
+  if (!Array.isArray(r.history)) {
+    throw new Error('PMatrix API: AgentGradeDetail.history missing or not an array');
+  }
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const RETRY_DELAYS = [100, 500, 2_000] as const;
+/**
+ * Burst-rate 429 backoff schedule (v0.7.0 cross-cutting C).
+ * Used when server middleware (burst_rate_limit) replies HTTP 429.
+ * Retry-After header takes precedence when present.
+ */
+const BURST_RETRY_DELAYS = [1_000, 5_000, 30_000] as const;
 const REQUEST_TIMEOUT_MS = 10_000;
+/** Cap applied when Retry-After is absent or too aggressive */
+const MAX_BURST_BACKOFF_MS = 30_000;
 
 const RESUBMIT_INTERVAL_MS = 60_000;
 const MAX_RESUBMIT_FILES   = 5;
@@ -53,18 +85,26 @@ export class PMatrixHttpClient {
   private readonly debug: boolean;
   private lastResubmitAt: number = 0;
 
+  /**
+   * Local sidecar URL for try-local-fallback-server pattern.
+   * When set, sendBatch tries localhost sidecar first, then falls back to server.
+   * Default: http://127.0.0.1:9850 (set PMATRIX_LOCAL_URL to override).
+   */
+  private readonly localUrl: string | null;
+
   constructor(config: PMatrixConfig) {
     this.baseUrl = config.serverUrl.replace(/\/$/, '');
     this.apiKey = config.apiKey;
     this.agentId = config.agentId;
     this.retryMax = config.batch.retryMax;
     this.debug = config.debug;
+    this.localUrl = (config as any).localUrl ?? process.env.PMATRIX_LOCAL_URL ?? null;
   }
 
   async getAgentGrade(agentId: string): Promise<GradeResponse> {
     const url = `${this.baseUrl}/v1/agents/${encodeURIComponent(agentId)}/public`;
     const raw = await this.fetchWithRetry('GET', url, null);
-    // TODO(runtime-guard): validate shape at runtime if payload schema drifts
+    assertGradeResponseShape(raw);
     return raw as GradeResponse;
   }
 
@@ -75,7 +115,7 @@ export class PMatrixHttpClient {
   async getAgentGradeDetail(agentId: string): Promise<AgentGradeDetail> {
     const url = `${this.baseUrl}/v1/agents/${encodeURIComponent(agentId)}/grade`;
     const raw = await this.fetchWithRetry('GET', url, null);
-    // TODO(runtime-guard): validate shape at runtime if payload schema drifts
+    assertAgentGradeDetailShape(raw);
     return raw as AgentGradeDetail;
   }
 
@@ -221,10 +261,28 @@ export class PMatrixHttpClient {
   // ─── Internal ──────────────────────────────────────────────────────────────
 
   private async sendBatchDirect(signals: SignalPayload[]): Promise<BatchSendResponse> {
-    const url = `${this.baseUrl}/v1/inspect/stream`;
     const body = signals.length === 1 ? signals[0] : signals;
+
+    // Try local sidecar first (if available)
+    if (this.localUrl) {
+      try {
+        const localEndpoint = `${this.localUrl}/v1/inspect/local`;
+        const raw = await this.fetchOnce('POST', localEndpoint, body);
+        if (this.debug) {
+          process.stderr.write(`[P-MATRIX] Local sidecar response received\n`);
+        }
+        return (raw as BatchSendResponse | null) ?? { received: signals.length };
+      } catch {
+        // Local sidecar unavailable — fall through to server
+        if (this.debug) {
+          process.stderr.write(`[P-MATRIX] Local sidecar unavailable, falling back to server\n`);
+        }
+      }
+    }
+
+    // Server path (with retries)
+    const url = `${this.baseUrl}/v1/inspect/stream`;
     const raw = await this.fetchWithRetry('POST', url, body);
-    // TODO(runtime-guard): validate shape at runtime if payload schema drifts
     return (raw as BatchSendResponse | null) ?? { received: signals.length };
   }
 
@@ -241,7 +299,20 @@ export class PMatrixHttpClient {
       } catch (err) {
         lastError = err as Error;
         if (attempt < this.retryMax) {
-          const delay = RETRY_DELAYS[attempt] ?? 2_000;
+          // v0.7.0 cross-cutting C: 429 burst — prefer Retry-After header,
+          // otherwise escalating BURST_RETRY_DELAYS.
+          const burstHint = (lastError as Error & { __retryAfterMs?: number; __status?: number });
+          let delay: number;
+          if (burstHint.__status === 429) {
+            const retryAfterMs = burstHint.__retryAfterMs;
+            if (retryAfterMs && retryAfterMs > 0) {
+              delay = Math.min(retryAfterMs, MAX_BURST_BACKOFF_MS);
+            } else {
+              delay = BURST_RETRY_DELAYS[attempt] ?? MAX_BURST_BACKOFF_MS;
+            }
+          } else {
+            delay = RETRY_DELAYS[attempt] ?? 2_000;
+          }
           if (this.debug) {
             process.stderr.write(
               `[P-MATRIX] Retry ${attempt + 1}/${this.retryMax} after ${delay}ms: ${lastError.message}\n`
@@ -263,10 +334,15 @@ export class PMatrixHttpClient {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
+    // v0.7.0 cross-cutting B: outgoing X-Request-ID for server correlation.
+    // crypto.randomUUID() — Node 18+ built-in, available in this engine target.
+    const reqId = generateRequestId();
+
     try {
       const headers: Record<string, string> = {
         'Authorization': `Bearer ${this.apiKey}`,
         'Content-Type': 'application/json',
+        'X-Request-ID': reqId,
       };
 
       const response = await fetch(url, {
@@ -276,8 +352,35 @@ export class PMatrixHttpClient {
         signal: controller.signal,
       });
 
+      // v0.7.0 cross-cutting B: trace echoed X-Request-ID for debugging
+      if (process.env['PMATRIX_DEBUG_TRACE']) {
+        const echoed = response.headers.get('X-Request-ID') ?? reqId;
+        process.stderr.write(
+          `[P-MATRIX] trace req_id=${echoed} status=${response.status}\n`
+        );
+      }
+
       if (!response.ok) {
         const text = await response.text().catch(() => '');
+
+        // v0.7.0 cross-cutting C: 429 burst → tag error so fetchWithRetry
+        // can apply Retry-After / BURST_RETRY_DELAYS backoff schedule.
+        if (response.status === 429) {
+          const retryAfterMs = parseRetryAfter(response.headers.get('Retry-After'));
+          const err = new Error(`HTTP 429: ${text.slice(0, 200)}`) as Error & {
+            __retryAfterMs?: number;
+            __status?: number;
+          };
+          err.__status = 429;
+          if (retryAfterMs !== null) err.__retryAfterMs = retryAfterMs;
+          throw err;
+        }
+
+        // v0.7.0 cross-cutting A: emit error_id for support correlation on 5xx.
+        if (response.status >= 500) {
+          this.emitErrorCorrelation(response, text);
+        }
+
         throw new Error(`HTTP ${response.status}: ${text.slice(0, 200)}`);
       }
 
@@ -286,6 +389,37 @@ export class PMatrixHttpClient {
     } finally {
       clearTimeout(timeoutId);
     }
+  }
+
+  /**
+   * v0.7.0 cross-cutting A — Error correlation logging.
+   * Server (Production Polish A) returns error_id / request_id in body + headers.
+   * Surface them on stderr so users can include the ID in support requests.
+   */
+  private emitErrorCorrelation(response: Response, rawText: string): void {
+    let bodyErrorId: string | undefined;
+    let bodyRequestId: string | undefined;
+    try {
+      const parsed = rawText ? JSON.parse(rawText) : null;
+      if (parsed && typeof parsed === 'object') {
+        const errObj = (parsed as Record<string, unknown>)['error'];
+        if (errObj && typeof errObj === 'object') {
+          const e = errObj as Record<string, unknown>;
+          if (typeof e['error_id'] === 'string') bodyErrorId = e['error_id'];
+          if (typeof e['request_id'] === 'string') bodyRequestId = e['request_id'];
+        }
+      }
+    } catch {
+      // body not JSON → fall back to headers only
+    }
+    const headerErrorId = response.headers.get('X-Error-ID') ?? undefined;
+    const headerRequestId = response.headers.get('X-Request-ID') ?? undefined;
+    const errorId = bodyErrorId ?? headerErrorId ?? 'unknown';
+    const requestId = bodyRequestId ?? headerRequestId ?? 'unknown';
+    process.stderr.write(
+      `[P-MATRIX] Error ${response.status}: error_id=${errorId} request_id=${requestId} ` +
+      `— Support 문의 시 Error ID 함께 제공해 주세요.\n`
+    );
   }
 
   private async backupToLocal(signals: SignalPayload[]): Promise<void> {
@@ -304,4 +438,47 @@ export class PMatrixHttpClient {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Generate a request id for X-Request-ID header (v0.7.0 cross-cutting B).
+ * Prefers crypto.randomUUID() (Node 18+); falls back to a timestamp-based id.
+ */
+function generateRequestId(): string {
+  try {
+    // Node 18+ has globalThis.crypto with randomUUID
+    const c: { randomUUID?: () => string } | undefined =
+      (globalThis as unknown as { crypto?: { randomUUID?: () => string } }).crypto;
+    if (c && typeof c.randomUUID === 'function') {
+      return c.randomUUID();
+    }
+  } catch {
+    // fall through
+  }
+  return `pm-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/**
+ * Parse Retry-After header (delta-seconds OR HTTP-date) into milliseconds.
+ * Returns null when header is missing or unparseable.
+ */
+function parseRetryAfter(header: string | null): number | null {
+  if (!header) return null;
+  const trimmed = header.trim();
+  if (!trimmed) return null;
+
+  // delta-seconds (integer)
+  const asInt = Number(trimmed);
+  if (Number.isFinite(asInt) && asInt >= 0) {
+    return Math.floor(asInt * 1000);
+  }
+
+  // HTTP-date (RFC 7231)
+  const dateMs = Date.parse(trimmed);
+  if (Number.isFinite(dateMs)) {
+    const delta = dateMs - Date.now();
+    return delta > 0 ? delta : 0;
+  }
+
+  return null;
 }

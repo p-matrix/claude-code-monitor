@@ -24,6 +24,7 @@ import {
 } from '../types';
 import { PMatrixHttpClient } from '../client';
 import { loadOrCreateState, saveState, isHaltActive } from '../state-store';
+import { BreachSupport } from '../breach-support';
 
 export async function handlePermissionRequest(
   event: PermissionRequestInput,
@@ -60,6 +61,12 @@ export async function handlePermissionRequest(
 
   const state = loadOrCreateState(session_id, config.agentId);
 
+  // Breach Taxonomy: approval tracking (load persisted state)
+  const breachSupport = BreachSupport.loadOrCreate(config.agentId, session_id);
+  const approvalToolName = event.tool_name ?? 'unknown';
+  const approvalActionId = `approval_${approvalToolName}_${Date.now()}`;
+  breachSupport.recordApprovalRequested(approvalActionId, approvalToolName);
+
   // ─── P3: META_CONTROL 빈도 측정 ────────────────────────────────────────────
   state.permissionRequestCount += 1;
 
@@ -67,6 +74,15 @@ export async function handlePermissionRequest(
   if (config.dataSharing) {
     const signal = buildMetaControlSignal(state, session_id, config.frameworkTag ?? 'stable');
     client.sendCritical(signal).catch(() => {});
+
+    // Breach Taxonomy: emit approval_requested observation signal
+    const approvalSignal = buildApprovalSignal(state, session_id, {
+      event_type: 'approval_requested',
+      approval_action_id: approvalActionId,
+      tool_name: approvalToolName,
+      priority: 'normal',
+    }, config.frameworkTag ?? 'stable');
+    client.sendCritical(approvalSignal).catch(() => {});
   }
 
   if (config.debug) {
@@ -84,6 +100,19 @@ export async function handlePermissionRequest(
       state.isHalted = true;
       state.haltReason = `R(t) ${state.currentRt.toFixed(2)} ≥ ${config.killSwitch.autoHaltOnRt}`;
       state.dangerEvents += 1;
+    }
+
+    // Breach Taxonomy: permission denied at Kill Switch → approval_denied
+    breachSupport.recordApprovalDenied(approvalActionId);
+    breachSupport.saveState(session_id);
+    if (config.dataSharing) {
+      const deniedSignal = buildApprovalSignal(state, session_id, {
+        event_type: 'approval_denied',
+        approval_action_id: approvalActionId,
+        tool_name: approvalToolName,
+        priority: 'critical',
+      }, config.frameworkTag ?? 'stable');
+      client.sendCritical(deniedSignal).catch(() => {});
     }
 
     saveState(state);
@@ -106,7 +135,23 @@ export async function handlePermissionRequest(
     };
   }
 
-  // Allow
+  // Allow — Breach Taxonomy: permission allowed → approval_granted
+  // NOTE: PermissionRequest fires when Claude shows the dialog.
+  // If the hook returns 'allow', the dialog is shown and the user may still deny.
+  // True approval_granted/denied from user response is tracked in pre-tool-use (allow)
+  // and post-tool-use-failure (deny) respectively.
+  breachSupport.recordApprovalGranted(approvalActionId);
+  breachSupport.saveState(session_id);
+  if (config.dataSharing) {
+    const grantedSignal = buildApprovalSignal(state, session_id, {
+      event_type: 'approval_granted',
+      approval_action_id: approvalActionId,
+      tool_name: approvalToolName,
+      priority: 'normal',
+    }, config.frameworkTag ?? 'stable');
+    client.sendCritical(grantedSignal).catch(() => {});
+  }
+
   saveState(state);
 
   return {
@@ -144,6 +189,32 @@ function buildMetaControlSignal(
       session_id: sessionId,
       permission_request_count: state.permissionRequestCount,
       priority: 'normal',
+    },
+    state_vector: null,
+  };
+}
+
+/** Breach Taxonomy: approval tracking signal (requested / granted / denied) */
+function buildApprovalSignal(
+  state: ReturnType<typeof loadOrCreateState>,
+  sessionId: string,
+  metadata: Record<string, unknown>,
+  frameworkTag: 'beta' | 'stable',
+): SignalPayload {
+  return {
+    agent_id: state.agentId,
+    baseline: 0.5,
+    norm: 0.5,
+    stability: 0.5,
+    meta_control: 0.5,
+    timestamp: new Date().toISOString(),
+    signal_source: 'claude_code_hook',
+    framework: 'claude_code',
+    framework_tag: frameworkTag,
+    schema_version: '0.3',
+    metadata: {
+      session_id: sessionId,
+      ...metadata,
     },
     state_vector: null,
   };

@@ -9,11 +9,11 @@ import { ToolRiskTier, GateAction, SafetyMode } from './types';
 // ─── R(t) → Mode boundaries (Server constants.py, §14-4) ─────────────────────
 
 export function rtToMode(rt: number): SafetyMode {
-  if (rt < 0.15) return 'A+1';
-  if (rt < 0.30) return 'A+0';
-  if (rt < 0.50) return 'A-1';
-  if (rt < 0.75) return 'A-2';
-  return 'A-0';
+  if (rt < 0.15) return 'normal';
+  if (rt < 0.30) return 'caution';
+  if (rt < 0.50) return 'alert';
+  if (rt < 0.75) return 'critical';
+  return 'halt';
 }
 
 // ─── Tool Risk Tier classification (§3-1) ─────────────────────────────────────
@@ -110,14 +110,14 @@ export function evaluateSafetyGate(
   const mode = rtToMode(rt);
   const rtStr = rt.toFixed(2);
 
-  if (mode === 'A-0') {
+  if (mode === 'halt') {
     return {
       action: 'BLOCK',
       reason: `HALT: R(t) ${rtStr} ≥ 0.75 — all tools blocked`,
     };
   }
 
-  if (mode === 'A-2') {
+  if (mode === 'critical') {
     if (toolRisk === 'HIGH' || toolRisk === 'MEDIUM') {
       return {
         action: 'BLOCK',
@@ -127,7 +127,7 @@ export function evaluateSafetyGate(
     return { action: 'ALLOW', reason: '' };
   }
 
-  if (mode === 'A-1' || mode === 'A+0') {
+  if (mode === 'alert' || mode === 'caution') {
     if (toolRisk === 'HIGH') {
       return {
         action: 'BLOCK',

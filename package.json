@@ -1,6 +1,6 @@
 {
   "name": "@pmatrix/claude-code-monitor",
-  "version": "0.5.0",
+  "version": "0.7.0",
   "description": "P-MATRIX runtime governance monitor for Claude Code — Safety Gate, Kill Switch, Live Grade",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

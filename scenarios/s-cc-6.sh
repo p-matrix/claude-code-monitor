@@ -55,7 +55,7 @@ if [ -f "${STATE_FILE}" ]; then
     state.isHalted = true;
     state.haltReason = 'R(t) 0.80 >= 0.75 (S-CC-6 demo)';
     state.currentRt = 0.80;
-    state.currentMode = 'A-0';  // R(t) >= 0.75 → A-0 (Halt zone)
+    state.currentMode = 'halt';  // R(t) >= 0.75 → A-0 (Halt zone)
     fs.writeFileSync('${STATE_FILE}', JSON.stringify(state, null, 2));
     console.log('  State updated: isHalted=true currentRt=0.80');
   "

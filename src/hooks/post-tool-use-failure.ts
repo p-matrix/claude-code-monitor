@@ -20,6 +20,7 @@ import { PMatrixHttpClient } from '../client';
 import {
   loadOrCreateState,
   saveState,
+  pushToolDuration,
 } from '../state-store';
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
@@ -29,15 +30,20 @@ export async function handlePostToolUseFailure(
   config: PMatrixConfig,
   client: PMatrixHttpClient
 ): Promise<void> {
-  const { session_id, tool_name } = event;
+  const { session_id, tool_name, duration_ms } = event;
 
   const state = loadOrCreateState(session_id, config.agentId);
 
   state.dangerEvents += 1;
 
+  // CC v2.1.119: capture duration_ms for latency telemetry (R(t) latency axis is server-side)
+  if (typeof duration_ms === 'number') {
+    pushToolDuration(state, duration_ms);
+  }
+
   // Build DRIFT observation signal
   // Note: tool failure nudges STABILITY upward (more failures = less stable)
-  const signal = buildFailureSignal(state, session_id, tool_name, config.frameworkTag ?? 'stable');
+  const signal = buildFailureSignal(state, session_id, tool_name, config.frameworkTag ?? 'stable', duration_ms);
 
   // Fire-and-forget — observation only, no response needed
   if (config.dataSharing) {
@@ -59,7 +65,8 @@ function buildFailureSignal(
   state: ReturnType<typeof loadOrCreateState>,
   sessionId: string,
   toolName: string,
-  frameworkTag: 'beta' | 'stable'
+  frameworkTag: 'beta' | 'stable',
+  durationMs?: number,
 ): SignalPayload {
   return {
     agent_id: state.agentId,
@@ -78,6 +85,8 @@ function buildFailureSignal(
       session_id: sessionId,
       tool_name: toolName,
       priority: 'normal',
+      success: false,
+      duration_ms: durationMs,
     },
     state_vector: null,
   };

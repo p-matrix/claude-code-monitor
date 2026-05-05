@@ -61,6 +61,21 @@ export interface SessionEndInput {
 }
 
 /**
+ * PostToolUse hook input — received via stdin
+ * Observation only — fired on every successful tool completion (CC v2.1.119+)
+ * duration_ms: tool execution latency. Forwarded to server for R(t) latency axis.
+ */
+export interface PostToolUseInput {
+  hook_event_name: 'PostToolUse';
+  session_id: string;
+  tool_name: string;
+  tool_use_id?: string;
+  /** Tool execution latency in ms (CC v2.1.119+) — telemetry only on monitor side */
+  duration_ms?: number;
+  cwd?: string;
+}
+
+/**
  * PostToolUseFailure hook input — received via stdin
  * command-only hook (no blocking capability)
  */
@@ -71,6 +86,8 @@ export interface PostToolUseFailureInput {
   tool_use_id?: string;
   /** Error type — collected for DRIFT analysis, NOT content */
   error?: string;
+  /** Tool execution latency before failure in ms (CC v2.1.119+) */
+  duration_ms?: number;
   cwd?: string;
 }
 
@@ -203,12 +220,55 @@ export interface StopFailureInput {
   error?: string;
 }
 
+/**
+ * CwdChanged hook input — CC v2.1.83 신규
+ * Observation only (no blocking) — fires when working directory changes (e.g. via cd, direnv)
+ */
+export interface CwdChangedInput {
+  hook_event_name: 'CwdChanged';
+  session_id: string;
+  /** Previous cwd (if available) */
+  old_cwd?: string;
+  /** New cwd */
+  cwd?: string;
+}
+
+/**
+ * FileChanged hook input — CC v2.1.89 신규
+ * Observation only (no blocking) — fires on filesystem change events
+ * Privacy-first: file paths only — no content
+ */
+export interface FileChangedInput {
+  hook_event_name: 'FileChanged';
+  session_id: string;
+  /** Path of changed file — privacy-first, content NOT accessed */
+  file_path?: string;
+  /** Change kind (created/modified/deleted) — if known */
+  change_kind?: string;
+  cwd?: string;
+}
+
+/**
+ * PermissionDenied hook input — CC v2.1.119 신규
+ * Observation only — fires when the auto-mode classifier denies a tool call.
+ * Single observer (retry NOT blocked) — model retry decision is upstream.
+ */
+export interface PermissionDeniedInput {
+  hook_event_name: 'PermissionDenied';
+  session_id: string;
+  tool_name?: string;
+  /** Reason from classifier (e.g., "high-risk tool, manual approval required") */
+  reason?: string;
+  cwd?: string;
+}
+
 /** Union of all hook inputs */
 export type ClaudeHookInput =
   | PreToolUseInput
   | PermissionRequestInput
   | SessionStartInput
   | SessionEndInput
+  | PostToolUseInput
   | PostToolUseFailureInput
   | SubagentStartInput
   | SubagentStopInput
@@ -220,7 +280,10 @@ export type ClaudeHookInput =
   | WorktreeCreateInput
   | WorktreeRemoveInput
   | TaskCreatedInput
-  | StopFailureInput;
+  | StopFailureInput
+  | CwdChangedInput
+  | FileChangedInput
+  | PermissionDeniedInput;
 
 // ─── Claude Code Hook Output (stdout JSON) ───────────────────────────────────
 
@@ -256,7 +319,7 @@ export interface PermissionRequestOutput {
 // ─── 5-Mode and Grade ─────────────────────────────────────────────────────────
 
 /** P-MATRIX 5-Mode (Server constants.py 경계값 기준) */
-export type SafetyMode = 'A+1' | 'A+0' | 'A-1' | 'A-2' | 'A-0';
+export type SafetyMode = 'normal' | 'caution' | 'alert' | 'critical' | 'halt';
 
 /** Trust Grade */
 export type TrustGrade = 'A' | 'B' | 'C' | 'D' | 'E';

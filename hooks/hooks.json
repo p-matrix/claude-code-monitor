@@ -163,6 +163,37 @@
           }
         ]
       }
+    ],
+    "CwdChanged": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pmatrix-cc cwd-changed"
+          }
+        ]
+      }
+    ],
+    "FileChanged": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pmatrix-cc file-changed"
+          }
+        ]
+      }
+    ],
+    "PermissionDenied": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pmatrix-cc permission-denied",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   }
 }

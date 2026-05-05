@@ -21,6 +21,9 @@
 //   pmatrix-cc worktree-remove         [CC v2.1.76+]
 //   pmatrix-cc task-created            [CC v2.1.85+]
 //   pmatrix-cc stop-failure            [CC v2.1.85+]
+//   pmatrix-cc cwd-changed             [CC v2.1.83+]
+//   pmatrix-cc file-changed            [CC v2.1.89+]
+//   pmatrix-cc permission-denied       [CC v2.1.119+]
 //   pmatrix-cc mcp            -- stdio MCP server (pmatrix_status/grade/halt)
 //   pmatrix-cc setup          -- writes hook config to ~/.claude/settings.json
 //
@@ -53,6 +56,9 @@ import {
   WorktreeRemoveInput,
   TaskCreatedInput,
   StopFailureInput,
+  CwdChangedInput,
+  FileChangedInput,
+  PermissionDeniedInput,
 } from './types';
 import { handlePreToolUse } from './hooks/pre-tool-use';
 import { handleSessionStart, handleSessionEnd } from './hooks/session';
@@ -70,6 +76,9 @@ import {
   handleTaskCreated,
 } from './hooks/observation';
 import { handleStopFailure } from './hooks/stop-failure';
+import { handleCwdChanged } from './hooks/cwd-changed';
+import { handleFileChanged } from './hooks/file-changed';
+import { handlePermissionDenied } from './hooks/permission-denied';
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
@@ -260,6 +269,25 @@ async function main(): Promise<void> {
       case 'stop-failure':
       case 'StopFailure': {
         await handleStopFailure(event as StopFailureInput, config, client);
+        break;
+      }
+
+      // CC v2.1.83/89/119 hooks (v0.7.0)
+      case 'cwd-changed':
+      case 'CwdChanged': {
+        await handleCwdChanged(event as CwdChangedInput, config, client);
+        break;
+      }
+
+      case 'file-changed':
+      case 'FileChanged': {
+        await handleFileChanged(event as FileChangedInput, config, client);
+        break;
+      }
+
+      case 'permission-denied':
+      case 'PermissionDenied': {
+        await handlePermissionDenied(event as PermissionDeniedInput, config, client);
         break;
       }
 

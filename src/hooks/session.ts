@@ -28,6 +28,7 @@ import {
   PersistedSessionState,
 } from '../state-store';
 import { deleteFieldState } from '@pmatrix/field-node-runtime';
+import { BreachSupport } from '../breach-support';
 
 // ─── SessionStart ─────────────────────────────────────────────────────────────
 
@@ -111,9 +112,24 @@ export async function handleSessionEnd(
       framework_tag: config.frameworkTag ?? 'stable',
     };
     await client.sendSessionSummary(summaryInput).catch(() => {});
+
+    // Breach Taxonomy: emit session_report observation signal
+    // Load persisted breach state for accurate counters
+    const breachSupport = BreachSupport.loadOrCreate(agentId, session_id);
+    const sessionReport = breachSupport.getSessionReport();
+    const reportSignal = buildSessionSignal(state, session_id, {
+      event_type: 'session_report',
+      subject: 'RPT-001',
+      report_type: sessionReport.report_type,
+      actions_summary: sessionReport.actions_summary,
+      session_duration_ms: sessionReport.session_duration_ms,
+      priority: 'normal',
+    }, config.frameworkTag ?? 'stable');
+    client.sendCritical(reportSignal).catch(() => {});
   }
 
-  // Clean up session state
+  // Clean up session state + breach state
+  BreachSupport.deleteState(session_id);
   deleteState(session_id);
   deleteFieldState(session_id);
 }

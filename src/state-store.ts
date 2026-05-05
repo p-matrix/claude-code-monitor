@@ -80,7 +80,26 @@ export interface PersistedSessionState {
   taskCount: number;
   /** StopFailure 발생 횟수 */
   stopFailureCount: number;
+
+  // ── CC v2.1.83/89/119 counters (v0.7.0) ──────────────────────────────────
+  /** CwdChanged 발생 횟수 — reactive env 관찰 (direnv 등) */
+  cwdChangeCount: number;
+  /** FileChanged 발생 횟수 — fs change observer */
+  fileChangeCount: number;
+  /** PermissionDenied 발생 횟수 — auto mode classifier 거부 카운트 */
+  permissionDeniedCount: number;
+  /**
+   * Recent tool durations in ms (last 100, ring buffer).
+   * Captured from PostToolUse / PostToolUseFailure duration_ms (CC v2.1.119).
+   * Forwarded to server for R(t) latency axis aggregation.
+   */
+  toolDurations: number[];
+  /** Last observed cwd — set by CwdChanged */
+  lastCwd?: string;
 }
+
+/** Ring-buffer cap for state.toolDurations */
+export const TOOL_DURATIONS_MAX = 100;
 
 // ─── Default state factory ────────────────────────────────────────────────────
 
@@ -91,7 +110,7 @@ function createDefaultState(sessionId: string, agentId: string): PersistedSessio
     agentId,
     startedAt: now,
     currentRt: 0,
-    currentMode: 'A+1',
+    currentMode: 'normal',
     grade: null,
     rtCacheExpiry: new Date(Date.now() - 1).toISOString(),  // expired immediately
     isHalted: false,
@@ -108,6 +127,10 @@ function createDefaultState(sessionId: string, agentId: string): PersistedSessio
     compactCount: 0,
     taskCount: 0,
     stopFailureCount: 0,
+    cwdChangeCount: 0,
+    fileChangeCount: 0,
+    permissionDeniedCount: 0,
+    toolDurations: [],
   };
 }
 
@@ -178,7 +201,25 @@ export function loadOrCreateState(sessionId: string, agentId: string): Persisted
   // CC v2.1.85: new counters
   state.taskCount ??= 0;
   state.stopFailureCount ??= 0;
+  // v0.7.0: CC v2.1.83/89/119 counters
+  state.cwdChangeCount ??= 0;
+  state.fileChangeCount ??= 0;
+  state.permissionDeniedCount ??= 0;
+  state.toolDurations ??= [];
   return state;
+}
+
+/**
+ * Push a tool duration onto state.toolDurations, trimming to TOOL_DURATIONS_MAX.
+ * Mutates the passed state object — caller must saveState() to persist.
+ */
+export function pushToolDuration(state: PersistedSessionState, durationMs: number): void {
+  if (!Number.isFinite(durationMs) || durationMs < 0) return;
+  state.toolDurations ??= [];
+  state.toolDurations.push(durationMs);
+  if (state.toolDurations.length > TOOL_DURATIONS_MAX) {
+    state.toolDurations.splice(0, state.toolDurations.length - TOOL_DURATIONS_MAX);
+  }
 }
 
 /**

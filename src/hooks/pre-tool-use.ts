@@ -30,6 +30,7 @@ import {
   PersistedSessionState,
 } from '../state-store';
 import { isField4Enabled, writeFieldState } from '@pmatrix/field-node-runtime';
+import { BreachSupport } from '../breach-support';
 
 /** Write field state partial for MCP IPC poller (fail-open, no-op if 4.0 not enabled) */
 function syncFieldState(sessionId: string, state: PersistedSessionState): void {
@@ -66,6 +67,11 @@ export async function handlePreToolUse(
   // 1. Load state (fail-open: createDefault if missing)
   const state = loadOrCreateState(session_id, agentId);
 
+  // Breach Taxonomy support — load persisted state (hook runs as new process)
+  const breachSupport = BreachSupport.loadOrCreate(agentId, session_id);
+  breachSupport.incrementToolCalls();
+  state.totalTurns += 1;
+
   // 2. Kill Switch: halted sessions block everything
   if (state.isHalted) {
     const output = buildDenyOutput(
@@ -73,6 +79,7 @@ export async function handlePreToolUse(
     );
     // persist safetyGateBlocks increment
     state.safetyGateBlocks += 1;
+    breachSupport.saveState(session_id);
     saveState(state);
     return output;
   }
@@ -101,13 +108,16 @@ export async function handlePreToolUse(
 
     state.dangerEvents += 1;
     state.safetyGateBlocks += 1;
+    breachSupport.recordBlockedAction(tool_name, mcBlock.reason);
+    breachSupport.incrementDenied();
+    breachSupport.saveState(session_id);
     saveState(state);
 
     return buildDenyOutput(`P-MATRIX Safety Gate: ${mcBlock.reason}`);
   }
 
   // 5. Get R(t) from server (with fail-open timeout)
-  const rt = await fetchRtWithFailOpen(state, session_id, tool_name, config, client);
+  const rt = await fetchRtWithFailOpen(state, session_id, tool_name, config, client, breachSupport);
 
   // 6. Evaluate safety gate
   const gateResult = evaluateSafetyGate(rt, toolRisk);
@@ -122,16 +132,20 @@ export async function handlePreToolUse(
 
     state.safetyGateBlocks += 1;
     state.dangerEvents += 1;  // safety gate block is a danger event
+    breachSupport.recordBlockedAction(tool_name, gateResult.reason);
+    breachSupport.incrementDenied();
     if (rt >= config.killSwitch.autoHaltOnRt) {
       state.isHalted = true;
       state.haltReason = `R(t) ${rt.toFixed(2)} ≥ ${config.killSwitch.autoHaltOnRt}`;
     }
+    breachSupport.saveState(session_id);
     saveState(state);
 
     return buildDenyOutput(`P-MATRIX Safety Gate: ${gateResult.reason}`);
   }
 
   // ALLOW
+  breachSupport.saveState(session_id);
   saveState(state);
   syncFieldState(session_id, state);
   return buildAllowOutput();
@@ -149,7 +163,8 @@ async function fetchRtWithFailOpen(
   sessionId: string,
   toolName: string,
   config: PMatrixConfig,
-  client: PMatrixHttpClient
+  client: PMatrixHttpClient,
+  breachSupport: BreachSupport,
 ): Promise<number> {
   // If cache is valid, use it (skip server call)
   if (isRtCacheValid(state)) {
@@ -159,6 +174,7 @@ async function fetchRtWithFailOpen(
   const signal = buildSignal(state, sessionId, toolName, {
     event_type: 'pre_tool_use',
     priority: 'normal',
+    in_scope: breachSupport.isInScope(toolName),
   }, config.frameworkTag ?? 'stable');
 
   try {
