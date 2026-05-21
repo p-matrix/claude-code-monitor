@@ -99,6 +99,7 @@ export async function handleSessionEnd(
 
   // Send session summary (dataSharing required — §11)
   if (config.dataSharing) {
+    // R-X.3 migration: signal_source + framework flow via AdapterIdentity
     const summaryInput: SessionSummaryInput = {
       sessionId: session_id,
       agentId,
@@ -107,8 +108,6 @@ export async function handleSessionEnd(
       credentialBlocks: state.credentialBlocks,
       safetyGateBlocks: state.safetyGateBlocks,
       endReason: end_reason,
-      signal_source: 'claude_code_hook',
-      framework: 'claude_code',
       framework_tag: config.frameworkTag ?? 'stable',
     };
     await client.sendSessionSummary(summaryInput).catch(() => {});

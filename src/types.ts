@@ -316,169 +316,32 @@ export interface PermissionRequestOutput {
   };
 }
 
-// ─── 5-Mode and Grade ─────────────────────────────────────────────────────────
+// ─── Re-export shared types from @pmatrix/core-sdk (R-X.3 migration) ──────
 
-/** P-MATRIX 5-Mode (Server constants.py 경계값 기준) */
-export type SafetyMode = 'normal' | 'caution' | 'alert' | 'critical' | 'halt';
+export type {
+  SafetyMode,
+  TrustGrade,
+  ToolRiskTier,
+  GateAction,
+  AxesState,
+  BatchSendResponse,
+  GradeResponse,
+  AgentGradeDetail,
+  AgentGradeHistoryItem,
+  SafetyGateConfig,
+  CredentialProtectionConfig,
+  KillSwitchConfig,
+  BatchConfig,
+  PMatrixConfig,
+} from '@pmatrix/core-sdk';
 
-/** Trust Grade */
-export type TrustGrade = 'A' | 'B' | 'C' | 'D' | 'E';
+import type { SignalPayload as CoreSignalPayload, SignalMetadata as CoreSignalMetadata } from '@pmatrix/core-sdk';
 
-/** Tool risk tier */
-export type ToolRiskTier = 'HIGH' | 'MEDIUM' | 'LOW';
-
-/** Safety Gate action */
-export type GateAction = 'ALLOW' | 'BLOCK';
-
-// ─── 4-axis state ─────────────────────────────────────────────────────────────
-//
-// Stability axis polarity convention:
-//   Monitor sends "instability" — higher value = more unstable (0=safe, 1.0=HALT).
-//   Server inverts stability for R(t) computation.
-//   Same field name, opposite semantic at producer vs consumer.
-//
-
-export interface AxesState {
-  baseline: number;
-  norm: number;
-  /** Instability score: 0=stable, 1.0=maximum instability. Server inverts via (1-stability). */
-  stability: number;
-  meta_control: number;
-}
-
-// ─── Signal Payload (POST /v1/inspect/stream) ─────────────────────────────────
-
-/**
- * POST /v1/inspect/stream payload — claude_code_hook variant
- * signal_source: 'claude_code_hook', framework: 'claude_code'
- */
-export interface SignalPayload {
-  agent_id: string;
-  baseline: number;
-  norm: number;
-  stability: number;
-  meta_control: number;
-  timestamp: string;
+// Claude Code-narrowed SignalPayload (literal vendor branding preserved)
+export interface SignalPayload extends Omit<CoreSignalPayload, 'signal_source' | 'framework'> {
   signal_source: 'claude_code_hook';
   framework: 'claude_code';
-  framework_tag: 'beta' | 'stable';
-  schema_version: '0.3';
-  metadata: SignalMetadata;
-  state_vector: null;
 }
 
-export interface SignalMetadata {
-  session_id?: string;
-  event_type?: string;
-  tool_name?: string;
-  priority?: 'critical' | 'normal';
-  meta_control_delta?: number;
-  baseline_delta?: number;
-  danger_events?: number;
-  credential_blocks?: number;
-  safety_gate_blocks?: number;
-  total_turns?: number;
-  end_reason?: string;
-  is_halted?: boolean;
-  [key: string]: unknown;
-}
-
-// ─── API Response types ───────────────────────────────────────────────────────
-
-/**
- * POST /v1/inspect/stream response
- * Server returns latest R(t)/Grade after receiving signals
- */
-export interface BatchSendResponse {
-  received: number;
-  risk?: number;
-  grade?: TrustGrade;
-  mode?: SafetyMode;
-  axes?: {
-    baseline: number;
-    norm: number;
-    stability: number;
-    meta_control: number;
-  };
-}
-
-/**
- * GET /v1/agents/{agent_id}/public response
- */
-export interface GradeResponse {
-  agent_id: string;
-  grade: TrustGrade;
-  p_score: number;
-  risk: number;
-  mode: SafetyMode;
-  axes: {
-    baseline: number;
-    norm: number;
-    stability: number;
-    meta_control: number;
-  };
-  last_updated: string;
-}
-
-/**
- * GET /v1/agents/{agent_id}/grade — grade history item
- */
-export interface AgentGradeHistoryItem {
-  grade: TrustGrade;
-  p_score: number;
-  completed_at: string;
-}
-
-/**
- * GET /v1/agents/{agent_id}/grade response — current grade + history
- * Phase 0 ③ confirmed: endpoint exists with history list
- */
-export interface AgentGradeDetail {
-  current_grade: TrustGrade | null;
-  p_score: number | null;
-  issued_at: string | null;
-  expires_at: string | null;
-  prev_grade: TrustGrade | null;
-  prev_p_score: number | null;
-  history: AgentGradeHistoryItem[];
-}
-
-// ─── Config types ─────────────────────────────────────────────────────────────
-
-export interface SafetyGateConfig {
-  enabled: boolean;
-  /** Server call timeout (ms). fail-open: >2500ms → PERMIT */
-  serverTimeoutMs: number;
-  /** Custom tool risk overrides */
-  customToolRisk?: Record<string, ToolRiskTier>;
-}
-
-export interface CredentialProtectionConfig {
-  enabled: boolean;
-  customPatterns: string[];
-}
-
-export interface KillSwitchConfig {
-  /** R(t) ≥ this value → auto Halt (default 0.75) */
-  autoHaltOnRt: number;
-}
-
-export interface BatchConfig {
-  maxSize: number;
-  flushIntervalMs: number;
-  retryMax: number;
-}
-
-export interface PMatrixConfig {
-  serverUrl: string;
-  agentId: string;
-  apiKey: string;
-  safetyGate: SafetyGateConfig;
-  credentialProtection: CredentialProtectionConfig;
-  killSwitch: KillSwitchConfig;
-  dataSharing: boolean;
-  agreedAt?: string;
-  batch: BatchConfig;
-  frameworkTag?: 'beta' | 'stable';
-  debug: boolean;
-}
+// Claude Code reuses core's SignalMetadata directly
+export type SignalMetadata = CoreSignalMetadata;
